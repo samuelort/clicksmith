@@ -33,18 +33,18 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             item.isVisible = visible
             lastVisible = visible
         }
-        let visual = state.visualState
+        let visual = state.healthVisual
         guard visual != lastVisual else { return }
         lastVisual = visual
         item.button?.image = AppIcons.menuBar(visual)
-        item.button?.setAccessibilityLabel("Clicksmith: \(state.statusText)")
+        item.button?.setAccessibilityLabel("Clicksmith: \(state.healthTitle)")
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         state.refreshStatus()
         menu.removeAllItems()
 
-        menu.addItem(disabled("Clicksmith — \(state.statusText)"))
+        menu.addItem(disabled("Clicksmith — \(state.healthTitle)"))
         let mice = state.connectedMice.map(\.name).joined(separator: ", ")
         menu.addItem(disabled("Mouse: \(mice.isEmpty ? "none connected" : mice)"))
         menu.addItem(disabled("Buttons: \(state.config.mappings.filter(\.enabled).count) active"))

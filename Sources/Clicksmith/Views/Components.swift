@@ -3,8 +3,10 @@ import AppKit
 import UniformTypeIdentifiers
 import ClicksmithCore
 
-/// 1.2.3: Nordic palette, taken from the app icon — warm off-whites, soft stone greys and
-/// one muted copper accent. Every colour adapts to light and dark mode.
+// MARK: - Design system (1.2.6)
+
+/// Nordic palette taken from the app icon — warm off-whites, soft stone greys and one muted
+/// copper accent. Every colour is a light/dark pair.
 enum Palette {
     private static func dynamic(_ light: (CGFloat, CGFloat, CGFloat), _ dark: (CGFloat, CGFloat, CGFloat)) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -15,7 +17,7 @@ enum Palette {
     }
 
     /// Muted copper — the scroll wheel and spark in the icon.
-    static let copper = dynamic((168, 101, 63), (212, 152, 112))
+    static let copper = dynamic((160, 96, 58), (212, 152, 112))
     /// Window background: warm paper / warm charcoal.
     static let canvas = dynamic((244, 241, 236), (30, 29, 27))
     /// Cards and sheets.
@@ -24,14 +26,24 @@ enum Palette {
     static let sidebar = dynamic((235, 231, 225), (36, 34, 32))
     /// Hairlines and quiet fills.
     static let stone = dynamic((120, 112, 102), (170, 162, 152))
-    /// Calm status colours instead of traffic-light green/orange/red.
-    static let sage = dynamic((104, 136, 100), (142, 176, 137))
-    static let amber = dynamic((176, 128, 52), (214, 170, 96))
-    static let clay = dynamic((170, 86, 70), (214, 128, 112))
+    /// Calm status colours.
+    static let sage = dynamic((96, 132, 92), (142, 176, 137))
+    static let amber = dynamic((168, 120, 44), (214, 170, 96))
+    static let clay = dynamic((166, 82, 66), (214, 128, 112))
+}
+
+/// 8-pt spacing scale used across the app.
+enum Space {
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+    static let l: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let page: CGFloat = 32
 }
 
 extension Color {
-    /// The one Clicksmith accent (name kept from 1.2 so all views pick up the new copper).
+    /// The one Clicksmith accent (kept as `ember` so every view picks up the copper).
     static let ember = Palette.copper
 }
 
@@ -50,6 +62,7 @@ enum AppIcons {
         return image
     }
 
+    /// Transparent rounded tile (1.2.6: no white matte).
     static var logo: NSImage { NSImage(named: "LogoTile") ?? NSApp.applicationIconImage }
 
     private static var iconCache: [String: NSImage] = [:]
@@ -68,9 +81,22 @@ enum AppIcons {
     }
 }
 
+/// The app logo drawn crisply at any size.
+struct LogoImage: View {
+    var size: CGFloat
+    var body: some View {
+        Image(nsImage: AppIcons.logo)
+            .resizable()
+            .interpolation(.high)
+            .antialiased(true)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Materials and styles
 
-/// Native sidebar material behind the custom sidebar.
+/// Native sidebar material (kept for views that want it).
 struct VisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .sidebar
 
@@ -106,7 +132,7 @@ struct StatusDot: View {
     var body: some View {
         Circle()
             .fill(color)
-            .frame(width: 8, height: 8)
+            .frame(width: 7, height: 7)
             .accessibilityHidden(true)
     }
     private var color: Color {
@@ -122,17 +148,35 @@ struct StatusPill: View {
     let state: EngineVisualState
     let text: String
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             StatusDot(state: state)
             Text(text).font(.caption.weight(.semibold))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
         .background(Capsule().fill(Palette.stone.opacity(0.12)))
+        .accessibilityElement(children: .combine)
     }
 }
 
 // MARK: - Containers
+
+/// Uniform card header: 14 pt copper icon + medium secondary title, same baseline everywhere.
+struct CardHeader: View {
+    let title: String
+    let systemImage: String
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.ember)
+                .frame(width: 14)
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
 
 struct Card<Content: View>: View {
     let title: String
@@ -140,13 +184,8 @@ struct Card<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label {
-                Text(title).foregroundStyle(.secondary)
-            } icon: {
-                Image(systemName: systemImage).foregroundStyle(Color.ember)
-            }
-            .font(.subheadline.weight(.medium))
+        VStack(alignment: .leading, spacing: Space.m) {
+            CardHeader(title: title, systemImage: systemImage)
             content
         }
         .padding(18)
@@ -160,9 +199,9 @@ extension View {
         background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Palette.card)
-                .shadow(color: .black.opacity(0.035), radius: 6, y: 2)
+                .shadow(color: .black.opacity(0.025), radius: 5, y: 1)
         )
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.stone.opacity(0.14)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.stone.opacity(0.12)))
     }
 }
 
@@ -177,11 +216,13 @@ struct Banner: View {
         HStack(spacing: 10) {
             Image(systemName: icon).foregroundStyle(tint)
             Text(text).fixedSize(horizontal: false, vertical: true)
-            Spacer()
+            Spacer(minLength: Space.s)
             if let actionTitle, let action { Button(actionTitle, action: action) }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.10)))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.09)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tint.opacity(0.18)))
     }
     private var icon: String {
         switch kind {
@@ -234,7 +275,7 @@ struct AppChip: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(nsImage: AppIcons.appIcon(bundleID: bundleID)).resizable().frame(width: 15, height: 15)
+            Image(nsImage: AppIcons.appIcon(bundleID: bundleID)).resizable().interpolation(.high).frame(width: 15, height: 15)
             Text(action.display)
                 .font(.system(.callout, design: .rounded).weight(.medium))
                 .lineLimit(1)
@@ -250,8 +291,7 @@ struct AppChip: View {
     }
 }
 
-/// The real result of a mapping: default action plus per-app actions.
-/// Never truncated — the row's text gives way instead.
+/// The real result of a mapping: default action plus per-app actions. Never truncated.
 struct MappingActionsView: View {
     let mapping: ButtonMapping
 
@@ -272,7 +312,7 @@ struct MappingActionsView: View {
             }
         }
         .fixedSize()
-        .opacity(mapping.enabled ? 1 : 0.45)
+        .opacity(mapping.enabled ? 1 : 0.4)
     }
 }
 
@@ -290,7 +330,8 @@ func scopeText(_ m: ButtonMapping) -> String {
     }
 }
 
-/// One mapping row: icon, name + scope, what it does, on/off, ⋯ menu. Double-click edits.
+/// One mapping row: name + scope on the left, what it does on the right, one ⋯ menu.
+/// 1.2.6: the on/off switch lives in the menu; disabled rows are dimmed and say "Off".
 struct MappingRow: View {
     let mapping: ButtonMapping
     var showDevice = false
@@ -299,25 +340,24 @@ struct MappingRow: View {
     @Local private var hovering = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.m) {
             Image(systemName: "computermouse.fill")
-                .foregroundStyle(mapping.enabled ? Color.ember : Color.secondary)
-                .frame(width: 18)
+                .font(.system(size: 13))
+                .foregroundStyle(mapping.enabled ? Color.ember : Palette.stone.opacity(0.6))
+                .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 Text(mapping.label).font(.body.weight(.medium)).lineLimit(1)
                 Text(showDevice ? "\(mapping.deviceName) · \(scopeText(mapping))" : scopeText(mapping))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
-            .help(scopeText(mapping))
-            Spacer(minLength: 8)
+            .opacity(mapping.enabled ? 1 : 0.6)
+            Spacer(minLength: Space.s)
             MappingActionsView(mapping: mapping)
                 .layoutPriority(1)
-            Toggle("", isOn: Binding(get: { mapping.enabled }, set: { state.toggleMapping(mapping, enabled: $0) }))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .accessibilityLabel("Enable \(mapping.label)")
             Menu {
+                Toggle("Enabled", isOn: Binding(get: { mapping.enabled },
+                                                set: { state.toggleMapping(mapping, enabled: $0) }))
+                Divider()
                 Button("Edit…", action: onEdit)
                 Button("Duplicate") { state.duplicate(mapping) }
                 Divider()
@@ -330,11 +370,12 @@ struct MappingRow: View {
             .fixedSize()
             .accessibilityLabel("More for \(mapping.label)")
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(hovering ? Palette.stone.opacity(0.07) : Color.clear).padding(.horizontal, -6))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: onEdit)
+        .help("Double-click to edit")
     }
 }
 
@@ -348,7 +389,28 @@ private let relativeFormatter: RelativeDateTimeFormatter = {
 
 func relative(_ date: Date?) -> String {
     guard let date else { return "—" }
+    if abs(date.timeIntervalSinceNow) < 45 { return "just now" }
     return relativeFormatter.localizedString(for: date, relativeTo: Date())
+}
+
+/// Elapsed time as a duration ("10 min", "2 h 5 min"), not "10 min ago".
+func duration(since date: Date?) -> String {
+    guard let date else { return "—" }
+    let seconds = max(0, Date().timeIntervalSince(date))
+    if seconds < 60 { return "< 1 min" }
+    let f = DateComponentsFormatter()
+    f.unitsStyle = .abbreviated
+    f.allowedUnits = seconds < 3600 ? [.minute] : (seconds < 86_400 ? [.hour, .minute] : [.day, .hour])
+    f.maximumUnitCount = 2
+    return f.string(from: seconds) ?? "—"
+}
+
+func miceCount(_ n: Int) -> String {
+    switch n {
+    case 0: return "None"
+    case 1: return "1 mouse"
+    default: return "\(n) mice"
+    }
 }
 
 func transportName(_ t: String?) -> String {

@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # Build steps shared by build-app.sh and install.sh. Run from the repository root.
 
-CS_VERSION="1.2.4"
-CS_BUILD="${BUILD_NUMBER:-9}"
+CS_VERSION="1.2.6"
+CS_BUILD="${BUILD_NUMBER:-11}"
 CS_SIGN="${SIGN_IDENTITY:--}"
 CS_APP="build/Clicksmith.app"
 CS_ENGINE="$CS_APP/Contents/Library/LoginItems/Clicksmith Engine.app"
@@ -84,13 +84,10 @@ PLIST
 }
 
 cs_icons() {
-  local set="build/AppIcon.iconset" s d
+  local set="build/AppIcon.iconset"
+  rm -rf "$set"
   mkdir -p "$set" || return 1
-  for s in 16 32 128 256 512; do
-    d=$((s * 2))
-    sips -z "$s" "$s" Resources/AppIcon.png --out "$set/icon_${s}x${s}.png" >/dev/null || return 1
-    sips -z "$d" "$d" Resources/AppIcon.png --out "$set/icon_${s}x${s}@2x.png" >/dev/null || return 1
-  done
+  cp Resources/AppIcon.iconset/*.png "$set/" || return 1
   iconutil -c icns "$set" -o "$CS_APP/Contents/Resources/AppIcon.icns" || return 1
   cp "$CS_APP/Contents/Resources/AppIcon.icns" "$CS_ENGINE/Contents/Resources/AppIcon.icns" || return 1
   cp Resources/MenuBar*.png Resources/LogoTile.png "$CS_APP/Contents/Resources/" || return 1
