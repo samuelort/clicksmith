@@ -90,14 +90,11 @@ No logging, disk I/O, scripts, UI work or network access belongs between the HID
 
 ### Private beta install
 
-1. Download the source release ZIP and place it in `~/Downloads`.
-2. Open Terminal.
-3. Run:
+1. Open Terminal.
+2. Run:
 
 ```bash
-cd ~/Downloads
-rm -rf clicksmith
-unzip -q Clicksmith-1.2.4-source.zip
+git clone https://github.com/samuelort/clicksmith.git
 cd clicksmith
 ./scripts/install.sh
 ```
