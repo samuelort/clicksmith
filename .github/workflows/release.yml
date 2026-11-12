@@ -1,0 +1,26 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test core
+        run: |
+          swift build -c release --product ClicksmithSelfTest
+          "$(swift build -c release --show-bin-path)/ClicksmithSelfTest"
+      - name: Build ad-hoc DMG
+        run: ./scripts/make-dmg.sh --build
+      - name: Checksums
+        run: shasum -a 256 build/Clicksmith-*.dmg > "$(ls build/Clicksmith-*.dmg).sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Clicksmith-*.dmg
+            build/Clicksmith-*.dmg.sha256
+          prerelease: true
+          generate_release_notes: true

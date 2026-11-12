@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+*.p12
+*.pfx
+*.cer
+*.key
+*.pem
+*.keychain-db
+*.mobileprovision

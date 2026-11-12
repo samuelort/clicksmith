@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build -c release
+      - name: Core self-test
+        run: '"$(swift build -c release --show-bin-path)/ClicksmithSelfTest"'
+      - name: XCTest
+        run: swift test
+      - name: Package app
+        run: ./scripts/build-app.sh --no-anim
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clicksmith-macOS-adhoc
+          path: build/Clicksmith.app

@@ -1,0 +1,11 @@
+IMPORTANT: the Clicksmith 1.2.4 application source is not contained in this archive because
+it is not available in the current working environment. Do not publish this repository as
+buildable until you merge your verified local 1.2.4 source.
+
+Easiest path on your Mac:
+  1. Extract this GitHub package.
+  2. Keep your verified 1.2.4 source at ~/Downloads/clicksmith.
+  3. In Terminal, cd into this GitHub package and run:
+       ./import-1.2.4-source.sh ~/Downloads/clicksmith
+  4. Confirm Package.swift, Sources/, Tests/, Resources/ and scripts/ now exist.
+  5. Run ./scripts/install.sh or swift build before publishing a release.
