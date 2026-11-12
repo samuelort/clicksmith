@@ -3,7 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 import ClicksmithCore
 
-// MARK: - Design system (1.2.6)
+// MARK: - Design system
 
 /// Nordic palette taken from the app icon — warm off-whites, soft stone greys and one muted
 /// copper accent. Every colour is a light/dark pair.
@@ -32,7 +32,7 @@ enum Palette {
     static let clay = dynamic((166, 82, 66), (214, 128, 112))
 }
 
-/// 8-pt spacing scale used across the app.
+/// 8-pt spacing scale used on every page.
 enum Space {
     static let xs: CGFloat = 4
     static let s: CGFloat = 8
@@ -40,11 +40,23 @@ enum Space {
     static let l: CGFloat = 16
     static let xl: CGFloat = 24
     static let page: CGFloat = 32
+    /// Content never stretches wider than this in large windows.
+    static let maxContent: CGFloat = 1040
 }
 
 extension Color {
     /// The one Clicksmith accent (kept as `ember` so every view picks up the copper).
     static let ember = Palette.copper
+}
+
+extension View {
+    /// Standard page frame: 32 pt margins, capped width, centred in wide windows.
+    func pageFrame() -> some View {
+        frame(maxWidth: Space.maxContent, alignment: .leading)
+            .padding(.horizontal, Space.page)
+            .padding(.vertical, Space.xl)
+            .frame(maxWidth: .infinity)
+    }
 }
 
 enum AppIcons {
@@ -62,7 +74,7 @@ enum AppIcons {
         return image
     }
 
-    /// Transparent rounded tile (1.2.6: no white matte).
+    /// Transparent rounded tile — no white matte.
     static var logo: NSImage { NSImage(named: "LogoTile") ?? NSApp.applicationIconImage }
 
     private static var iconCache: [String: NSImage] = [:]
@@ -92,23 +104,6 @@ struct LogoImage: View {
             .frame(width: size, height: size)
             .accessibilityHidden(true)
     }
-}
-
-// MARK: - Materials and styles
-
-/// Native sidebar material (kept for views that want it).
-struct VisualEffect: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .sidebar
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material = material
-        v.blendingMode = .behindWindow
-        v.state = .followsWindowActiveState
-        return v
-    }
-
-    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.material = material }
 }
 
 /// Text link in the Clicksmith accent (replaces system-blue `.link` buttons).
@@ -161,7 +156,7 @@ struct StatusPill: View {
 
 // MARK: - Containers
 
-/// Uniform card header: 14 pt copper icon + medium secondary title, same baseline everywhere.
+/// Uniform card header: copper icon + medium secondary title, same baseline everywhere.
 struct CardHeader: View {
     let title: String
     let systemImage: String
@@ -330,13 +325,36 @@ func scopeText(_ m: ButtonMapping) -> String {
     }
 }
 
+/// ⋯ menu for one mapping: Enabled, Edit, Duplicate, Delete.
+struct MappingMenu: View {
+    let mapping: ButtonMapping
+    let onEdit: () -> Void
+    @ObservedObject private var state = AppState.shared
+
+    var body: some View {
+        Menu {
+            Toggle("Enabled", isOn: Binding(get: { mapping.enabled },
+                                            set: { state.toggleMapping(mapping, enabled: $0) }))
+            Divider()
+            Button("Edit…", action: onEdit)
+            Button("Duplicate") { state.duplicate(mapping) }
+            Divider()
+            Button("Delete", role: .destructive) { state.delete(mapping.id) }
+        } label: {
+            Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("More for \(mapping.label)")
+    }
+}
+
 /// One mapping row: name + scope on the left, what it does on the right, one ⋯ menu.
-/// 1.2.6: the on/off switch lives in the menu; disabled rows are dimmed and say "Off".
 struct MappingRow: View {
     let mapping: ButtonMapping
     var showDevice = false
     let onEdit: () -> Void
-    @ObservedObject private var state = AppState.shared
     @Local private var hovering = false
 
     var body: some View {
@@ -354,21 +372,7 @@ struct MappingRow: View {
             Spacer(minLength: Space.s)
             MappingActionsView(mapping: mapping)
                 .layoutPriority(1)
-            Menu {
-                Toggle("Enabled", isOn: Binding(get: { mapping.enabled },
-                                                set: { state.toggleMapping(mapping, enabled: $0) }))
-                Divider()
-                Button("Edit…", action: onEdit)
-                Button("Duplicate") { state.duplicate(mapping) }
-                Divider()
-                Button("Delete", role: .destructive) { state.delete(mapping.id) }
-            } label: {
-                Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("More for \(mapping.label)")
+            MappingMenu(mapping: mapping, onEdit: onEdit)
         }
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(hovering ? Palette.stone.opacity(0.07) : Color.clear).padding(.horizontal, -6))

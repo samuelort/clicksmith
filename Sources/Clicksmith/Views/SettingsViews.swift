@@ -13,15 +13,19 @@ struct SettingsContainer: View {
                 Text("Settings").font(.largeTitle.weight(.semibold))
                 Spacer()
                 Picker("Section", selection: $state.settingsTab) {
-                    ForEach(SettingsTab.allCases) { Text($0.title).tag($0) }
+                    ForEach(SettingsTab.allCases) { tab in
+                        Text(tab == .permissions && state.missingPermissions > 0 ? "Permissions •" : tab.title).tag(tab)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 420)
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-            .padding(.bottom, 8)
+            .frame(maxWidth: Space.maxContent)
+            .padding(.horizontal, Space.page)
+            .padding(.top, Space.xl)
+            .padding(.bottom, Space.s)
+            .frame(maxWidth: .infinity)
 
             Group {
                 switch state.settingsTab {
@@ -31,6 +35,7 @@ struct SettingsContainer: View {
                 case .about: AboutView()
                 }
             }
+            .frame(maxWidth: Space.maxContent + Space.page * 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
@@ -88,17 +93,23 @@ struct GeneralSettingsView: View {
                         in: 1...10, step: 0.5) {
                     LabeledContent("Wake recovery delay", value: String(format: "%.1f s", s.wakeRestartDelay))
                 }
+            }
+
+            Section {
                 Toggle("Emergency pause shortcut ⌃⌥⌘⎋", isOn: Binding(
                     get: { s.emergencyHotKeyEffective },
                     set: { v in state.update { $0.settings.emergencyHotKeyEnabled = v } }))
                     .disabled(s.allowPrimaryButtonSuppression)
-                if s.allowPrimaryButtonSuppression {
-                    Text("Always on while left/right-click blocking is allowed, so you can't lock yourself out.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
                 Toggle("Allow blocking left and right click", isOn: Binding(
                     get: { s.allowPrimaryButtonSuppression },
                     set: { v in if v { confirmPrimary = true } else { state.update { $0.settings.allowPrimaryButtonSuppression = false } } }))
+            } header: {
+                Text("Safety")
+            } footer: {
+                Text(s.allowPrimaryButtonSuppression
+                     ? "The emergency shortcut stays on while click blocking is allowed, so you can't lock yourself out."
+                     : "⌃⌥⌘⎋ pauses every mapping and button block instantly.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Appearance") {
@@ -203,17 +214,17 @@ struct PermissionsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.l) {
                 Text("Only Clicksmith Engine needs input permissions. The settings app needs none.")
                     .foregroundStyle(.secondary)
                 PermissionRow(title: "Input Monitoring",
                               detail: "Lets Clicksmith Engine see which mouse button you press. Button events are processed locally and never stored or transmitted.",
-                              granted: state.status?.inputMonitoring == "granted",
+                              granted: state.inputMonitoringGranted,
                               unknown: state.status == nil,
                               url: SystemSettingsLink.inputMonitoring)
                 PermissionRow(title: "Accessibility",
                               detail: "Lets Clicksmith Engine send the action you assign, and block a button's original action if you ask it to.",
-                              granted: state.status?.accessibility == true,
+                              granted: state.accessibilityGranted,
                               unknown: state.status == nil,
                               url: SystemSettingsLink.accessibility)
                 Card(title: "If Clicksmith Engine isn't in the list", systemImage: "questionmark.circle") {
@@ -228,16 +239,14 @@ struct PermissionsView: View {
                             NSPasteboard.general.setString(state.engine.engineAppURL.path, forType: .string)
                         }
                         Button("Restart Engine") {
-                            state.engine.perform({ state.engine.restart() }) { state.engineMessage = $0 }
+                            state.engine.perform({ state.engine.restart() }) { state.engineMessage = $0; state.refreshStatus() }
                         }
                         .buttonStyle(.borderedProminent)
                     }
                 }
-                Text("Clicksmith never tries to bypass macOS privacy controls. Status shown here comes from the engine itself.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 16)
+            .padding(.horizontal, Space.page)
+            .padding(.vertical, Space.l)
         }
     }
 }
@@ -254,11 +263,13 @@ private struct PermissionRow: View {
             HStack(alignment: .top) {
                 Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 20)
-                VStack(alignment: .trailing, spacing: 8) {
+                VStack(alignment: .trailing, spacing: Space.s) {
                     Text(unknown ? "Engine not running" : (granted ? "Granted" : "Not granted"))
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(granted ? Palette.sage : Palette.amber)
-                    Button("Open System Settings") { NSWorkspace.shared.open(url) }
+                    if !granted {
+                        Button("Open System Settings") { NSWorkspace.shared.open(url) }
+                    }
                 }
             }
         }
@@ -281,13 +292,13 @@ struct DiagnosticsView: View {
     var body: some View {
         Form {
             Section("Versions") {
-                LabeledContent("Clicksmith", value: ClicksmithInfo.version)
+                LabeledContent("Clicksmith", value: ClicksmithInfo.displayVersion)
                 LabeledContent("Engine", value: (state.status?.engineVersion ?? "—") + (state.engineVersionMismatch != nil ? " (restart to update)" : ""))
                 LabeledContent("macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
                 LabeledContent("Architecture", value: architecture)
             }
             Section("Engine") {
-                LabeledContent("State", value: state.statusText)
+                LabeledContent("State", value: state.healthTitle)
                 LabeledContent("Process ID", value: state.status.map { "\($0.pid)" } ?? "—")
                 LabeledContent("Started", value: relative(state.status?.startedAt))
                 LabeledContent("Started by wake recovery", value: state.status?.startedAfterWake == true ? "Yes" : "No")
@@ -300,8 +311,8 @@ struct DiagnosticsView: View {
                 LabeledContent("Last error", value: state.status?.lastError ?? "None")
             }
             Section("Permissions") {
-                LabeledContent("Input Monitoring", value: state.status?.inputMonitoring.capitalized ?? "—")
-                LabeledContent("Accessibility", value: state.status.map { $0.accessibility ? "Granted" : "Not granted" } ?? "—")
+                LabeledContent("Input Monitoring", value: state.status == nil ? "—" : (state.inputMonitoringGranted ? "Granted" : "Not granted"))
+                LabeledContent("Accessibility", value: state.status == nil ? "—" : (state.accessibilityGranted ? "Granted" : "Not granted"))
             }
             Section("Devices & mappings") {
                 ForEach(state.connectedDevices) { d in
@@ -327,8 +338,8 @@ struct DiagnosticsView: View {
             }
             Section {
                 HStack {
-                    Button("Restart Input Engine") {
-                        state.engine.perform({ state.engine.restart() }) { state.engineMessage = $0 }
+                    Button("Restart Engine") {
+                        state.engine.perform({ state.engine.restart() }) { state.engineMessage = $0; state.refreshStatus() }
                     }
                     Button("Engine Log") { NSWorkspace.shared.open(ClicksmithPaths.logFile) }
                     Button("App Log") { NSWorkspace.shared.open(AppLog.url) }
@@ -380,15 +391,15 @@ struct AboutView: View {
     var body: some View {
         VStack(spacing: 14) {
             Spacer(minLength: 10)
-            Image(nsImage: AppIcons.logo).resizable().frame(width: 140, height: 140)
-                .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
+            LogoImage(size: 128)
+                .shadow(color: .black.opacity(0.08), radius: 14, y: 6)
             Text("Clicksmith").font(.system(size: 34, weight: .semibold))
-            Text("Forge every mouse button into something useful.").font(.title3).foregroundStyle(.secondary)
-            Text("Version \(ClicksmithInfo.version)").foregroundStyle(.secondary)
+            Text("Small clicks. A calmer workflow.").font(.title3).foregroundStyle(.secondary)
+            Text("Version \(ClicksmithInfo.displayVersion)").foregroundStyle(.secondary)
             Divider().frame(width: 320)
             Label("Local only · no telemetry · no network · no keystroke logging", systemImage: "hand.raised.fill")
                 .font(.callout)
-            Text("Built on the rival3-dpi engine: native IOHID input with fresh-process wake recovery.\nMIT License.")
+            Text("Native IOHID input with fresh-process wake recovery.\nMIT License.")
                 .multilineTextAlignment(.center)
                 .font(.caption)
                 .foregroundStyle(.secondary)

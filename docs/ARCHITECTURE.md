@@ -47,3 +47,12 @@ Engine → app:
 - Darwin notification pings
 
 Local IPC files live in `~/Library/Application Support/Clicksmith` and are validated for owner and permissions.
+
+
+## Health model (2.0)
+
+`HealthModel.evaluate` in ClicksmithCore turns engine status, permissions, pause flags and the number of connected mice into one `HealthState`. Priority: stopped → missing permissions → emergency pause → pause → no mouse → ready. The UI (`Health+AppState.swift`) only maps it to wording and colour, so every screen agrees and every rule is self-tested.
+
+## Open-app policy (2.0)
+
+`AppLocationPolicy` allows apps under /Applications, ~/Applications, /System/Applications, /System/Library/CoreServices and the Safari cryptex. The engine checks it before launching.

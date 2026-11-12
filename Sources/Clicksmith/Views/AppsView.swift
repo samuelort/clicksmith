@@ -41,22 +41,23 @@ struct AppsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: Space.l) {
                 HStack(alignment: .firstTextBaseline) {
                     PageHeader(title: "Apps", subtitle: "Give buttons a different job in specific apps. Everywhere else, the defaults apply.")
                     addMenu
                 }
-                if let last = state.lastUsedApp {
-                    Banner(kind: .info, text: last.profile == nil
-                           ? "\(last.name) was last in front and uses the default buttons."
-                           : "\(last.name) was last in front and uses its own profile.")
-                }
+                .padding(.bottom, Space.s)
                 defaultCard
                 ForEach(apps) { app in appCard(app) }
                 if apps.isEmpty { emptyCard }
+                if let last = state.lastUsedApp {
+                    Text(last.profile == nil ? "Last active: \(last.name) · Default profile"
+                                             : "Last active: \(last.name) · its own profile")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
+            .pageFrame()
         }
         .sheet(item: $adding) { app in
             AddAppSheet(app: app) { mapping in
@@ -113,11 +114,11 @@ struct AppsView: View {
                 Text("No button has a default action yet.").foregroundStyle(.secondary)
             }
             ForEach(defaults) { m in
-                HStack {
-                    Text(m.label)
+                HStack(spacing: Space.m) {
+                    Text(m.label).font(.body.weight(.medium))
                     if state.hasSeveralMice { Text(m.deviceName).font(.caption).foregroundStyle(.secondary) }
                     Spacer()
-                    if let d = m.defaultAction { ShortcutBadge(text: d.display).opacity(m.enabled ? 1 : 0.45) }
+                    if let d = m.defaultAction { ShortcutBadge(text: d.display).opacity(m.enabled ? 1 : 0.4) }
                     Button("Edit") { editing = m }.buttonStyle(.accentLink)
                 }
             }
@@ -125,9 +126,9 @@ struct AppsView: View {
     }
 
     private func appCard(_ app: AppGroup) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Image(nsImage: AppIcons.appIcon(bundleID: app.id)).resizable().frame(width: 32, height: 32)
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.m) {
+                Image(nsImage: AppIcons.appIcon(bundleID: app.id)).resizable().interpolation(.high).frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.name).font(.title3.weight(.semibold))
                     Text("\(app.items.count) button\(app.items.count == 1 ? "" : "s") changed")
@@ -148,7 +149,7 @@ struct AppsView: View {
             .help(app.id)
             Divider()
             ForEach(app.items) { item in
-                HStack(spacing: 10) {
+                HStack(spacing: Space.m) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.mapping.label).font(.body.weight(.medium))
                         if state.hasSeveralMice {
@@ -160,7 +161,7 @@ struct AppsView: View {
                         Text("instead of \(d.display)").font(.caption).foregroundStyle(.secondary)
                     }
                     ShortcutBadge(text: item.override.action.display)
-                        .opacity(item.override.enabled ? 1 : 0.45)
+                        .opacity(item.override.enabled ? 1 : 0.4)
                     Toggle("", isOn: Binding(get: { item.override.enabled },
                                              set: { state.toggleOverride(mappingID: item.mapping.id, overrideID: item.override.id, enabled: $0) }))
                         .labelsHidden()
@@ -178,7 +179,7 @@ struct AppsView: View {
 
     private var emptyCard: some View {
         VStack(spacing: 10) {
-            Image(systemName: "square.grid.2x2").font(.system(size: 34, weight: .light)).foregroundStyle(Color.ember)
+            Image(systemName: "square.grid.2x2").font(.system(size: 32, weight: .light)).foregroundStyle(Color.ember)
             Text("No app-specific buttons yet").font(.title3.weight(.semibold))
             Text("Example: make Back mute your microphone (⇧⌘M) only in Microsoft Teams.")
                 .foregroundStyle(.secondary)
@@ -198,15 +199,15 @@ struct AddAppSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(nsImage: AppIcons.appIcon(bundleID: app.id)).resizable().frame(width: 40, height: 40)
+        VStack(alignment: .leading, spacing: Space.l) {
+            HStack(spacing: Space.m) {
+                Image(nsImage: AppIcons.appIcon(bundleID: app.id)).resizable().interpolation(.high).frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Change a button in \(app.name)").font(.title2.weight(.semibold))
                     Text("Choose the button. Next you pick what it does in \(app.name).").foregroundStyle(.secondary)
                 }
             }
-            VStack(spacing: 4) {
+            VStack(spacing: Space.xs) {
                 ForEach(state.config.mappings) { m in
                     Button { onPick(withOverride(m)) } label: {
                         HStack {
@@ -235,8 +236,9 @@ struct AddAppSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }
-        .padding(24)
+        .padding(Space.xl)
         .frame(width: 480)
+        .background(Palette.canvas)
     }
 
     private func withOverride(_ m: ButtonMapping) -> ButtonMapping {

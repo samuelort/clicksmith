@@ -200,6 +200,29 @@ public enum CoreChecks {
         check("switch into Teams changes the profile", compiled.profileDiffers("com.apple.Safari", teams))
         check("switch out of Teams changes the profile", compiled.profileDiffers(teams, nil))
 
+        // --- 2.0: health model ---
+        func health(_ running: Bool = true, im: Bool = true, ax: Bool = true,
+                    emergency: Bool = false, paused: Bool = false, mice: Int = 1) -> HealthState {
+            HealthModel.evaluate(engineRunning: running, inputMonitoringGranted: im, accessibilityGranted: ax,
+                                 emergencyPaused: emergency, paused: paused, connectedMice: mice)
+        }
+        check("health: ready", health() == .ready)
+        check("health: stopped engine wins", health(false, im: false, ax: false) == .stopped)
+        check("health: two permissions missing", health(im: false, ax: false) == .needsSetup(missing: 2))
+        check("health: setup beats pause", health(ax: false, paused: true) == .needsSetup(missing: 1))
+        check("health: emergency beats pause", health(emergency: true, paused: true) == .paused(emergency: true))
+        check("health: paused", health(paused: true) == .paused(emergency: false))
+        check("health: no mouse", health(mice: 0) == .noMouse)
+
+        // --- 2.0: open-app location policy ---
+        check("open app: /Applications allowed", AppLocationPolicy.isAllowed(path: "/Applications/Safari.app", home: "/Users/a"))
+        check("open app: system apps allowed", AppLocationPolicy.isAllowed(path: "/System/Applications/Calculator.app", home: "/Users/a"))
+        check("open app: Finder allowed", AppLocationPolicy.isAllowed(path: "/System/Library/CoreServices/Finder.app", home: "/Users/a"))
+        check("open app: ~/Applications allowed", AppLocationPolicy.isAllowed(path: "/Users/a/Applications/Tool.app", home: "/Users/a"))
+        check("open app: Downloads refused", !AppLocationPolicy.isAllowed(path: "/Users/a/Downloads/Teams.app", home: "/Users/a"))
+        check("open app: traversal refused", !AppLocationPolicy.isAllowed(path: "/Applications/../tmp/Evil.app", home: "/Users/a"))
+        check("open app: non-app refused", !AppLocationPolicy.isAllowed(path: "/Applications/script.sh", home: "/Users/a"))
+
         return r
     }
 }

@@ -176,7 +176,9 @@ public enum IPCFiles {
 }
 
 public enum ClicksmithInfo {
-    public static let version = "1.2.6"
+    public static let version = "2.0.0"
+    /// Shown in the UI.
+    public static let displayVersion = "2.0 RC 1"
     public static let engineLabel = "app.clicksmith.engine"
     public static let legacyRivalLabel = "se.samuel.rival3-dpi"
 

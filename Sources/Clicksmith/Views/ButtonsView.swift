@@ -1,7 +1,7 @@
 import SwiftUI
 import ClicksmithCore
 
-/// Devices and Mappings in one "Buttons" page per mouse.
+/// One "Buttons" page per mouse: diagram + legend, the mappings on this mouse, scan and details.
 struct ButtonsView: View {
     @ObservedObject private var state = AppState.shared
     @Local private var draft: ButtonMapping? = nil
@@ -26,13 +26,17 @@ struct ButtonsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "computermouse").font(.system(size: 46, weight: .light)).foregroundStyle(Color.ember)
+        VStack(spacing: Space.m) {
+            Image(systemName: "computermouse").font(.system(size: 44, weight: .light)).foregroundStyle(Color.ember)
             Text("No mouse yet").font(.title2.weight(.semibold))
-            Text(state.engineRunning ? "Connect a mouse and it appears here automatically."
-                                     : "Start the engine to see your mice.")
+            Text(!state.engineRunning ? "Start the engine to see your mice."
+                 : (state.inputMonitoringGranted ? "Connect a mouse and it appears here automatically."
+                    : "Mice appear once Input Monitoring is allowed."))
                 .foregroundStyle(.secondary)
-            if state.hiddenBuiltInCount > 0 {
+            if state.engineRunning && !state.inputMonitoringGranted {
+                Button("Open Settings") { NSWorkspace.shared.open(SystemSettingsLink.inputMonitoring) }
+                    .buttonStyle(.accentLink)
+            } else if state.hiddenBuiltInCount > 0 {
                 Button("Show built-in trackpad") { state.update { $0.settings.showBuiltInDevices = true } }
                     .buttonStyle(.accentLink)
             }
@@ -79,19 +83,19 @@ private struct DeviceButtonsPage: View {
     private var mappings: [ButtonMapping] {
         state.config.mappings.filter { $0.device.matches(device.key) || device.key.matches($0.device) }
     }
-    private var canLearn: Bool { device.connected && state.engineRunning }
+    private var canLearn: Bool { device.connected && state.engineRunning && state.inputMonitoringGranted }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: Space.l) {
                 header
+                    .padding(.bottom, Space.s)
                 diagramCard
                 mappingsCard
                 scanCard
                 detailsCard
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
+            .pageFrame()
         }
         .onReceive(state.$learnResult) { result in handleLearn(result) }
     }
@@ -119,7 +123,8 @@ private struct DeviceButtonsPage: View {
     }
 
     private var subtitle: String {
-        var parts = [device.manufacturer ?? "Pointing device"]
+        var parts: [String] = []
+        if let m = device.manufacturer, !m.isEmpty { parts.append(m) }
         parts.append(device.connected ? transportName(device.transport) : "Not connected")
         parts.append("\(mappings.count) mapped")
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
@@ -131,7 +136,7 @@ private struct DeviceButtonsPage: View {
         Card(title: "Buttons", systemImage: "hand.point.up.left") {
             Text("Click any button on the mouse or in the list to map it.")
                 .foregroundStyle(.secondary)
-            HStack(alignment: .center, spacing: 28) {
+            HStack(alignment: .center, spacing: Space.xl + 4) {
                 MouseDiagram(hotspots: hotspots, pending: pending, hovered: $hovered,
                              mapped: { mapping(for: $0) != nil },
                              help: { h in mapping(for: h).map { scopeText($0) } ?? "Not mapped" },
@@ -140,7 +145,7 @@ private struct DeviceButtonsPage: View {
                 legend
             }
             if let pending {
-                HStack(spacing: 8) {
+                HStack(spacing: Space.s) {
                     ProgressView().controlSize(.small)
                     Text("Press \(pending.name) on your mouse now…").foregroundStyle(Color.ember)
                     Spacer()
@@ -151,7 +156,8 @@ private struct DeviceButtonsPage: View {
                 Label(learnMessage, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
             }
             if !canLearn {
-                Label(device.connected ? "Start the engine to learn new buttons." : "Connect this mouse to learn new buttons.",
+                Label(!device.connected ? "Connect this mouse to learn new buttons."
+                      : (state.inputMonitoringGranted ? "Start the engine to learn new buttons." : "Allow Input Monitoring to learn new buttons."),
                       systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Palette.amber)
             }
@@ -179,7 +185,7 @@ private struct DeviceButtonsPage: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 6)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Space.s)
             .background(RoundedRectangle(cornerRadius: 7).fill(hovered == h.id ? Color.ember.opacity(0.10) : Color.clear))
             .contentShape(Rectangle())
             .opacity(m == nil ? 0.7 : 1)
@@ -201,7 +207,7 @@ private struct DeviceButtonsPage: View {
                 VStack(spacing: 0) {
                     ForEach(mappings) { m in
                         MappingRow(mapping: m) { draft = m }
-                        if m.id != mappings.last?.id { Divider().padding(.leading, 30) }
+                        if m.id != mappings.last?.id { Divider().padding(.leading, 28) }
                     }
                 }
             }
@@ -280,7 +286,7 @@ private struct DeviceButtonsPage: View {
                     Image(systemName: "sparkle").foregroundStyle(Color.ember)
                     Text(d.suggestedLabel)
                     Spacer()
-                    Button("Map…") { draft = MappingEditor.draft(from: d) }
+                    Button("Map…") { draft = MappingEditor.draft(from: d) }.buttonStyle(.accentLink)
                 }
             }
         }
@@ -316,7 +322,7 @@ private struct DeviceButtonsPage: View {
 
 // MARK: - Mouse diagram
 
-/// A top-down mouse with soft shading. Every part is a button; orange parts are mapped,
+/// A top-down mouse in the icon's materials. Every part is a button; copper parts are mapped,
 /// and hovering a part highlights the matching list row (and the other way round).
 struct MouseDiagram: View {
     let hotspots: [MouseHotspot]
@@ -331,8 +337,7 @@ struct MouseDiagram: View {
     var body: some View {
         ZStack {
             bodyShape
-                .fill(LinearGradient(colors: [Palette.card, Palette.sidebar],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(LinearGradient(colors: [Palette.card, Palette.sidebar], startPoint: .top, endPoint: .bottom))
                 .shadow(color: .black.opacity(0.08), radius: 14, y: 8)
                 .overlay(bodyShape.strokeBorder(Palette.stone.opacity(0.22), lineWidth: 1))
                 .frame(width: 150, height: 250)

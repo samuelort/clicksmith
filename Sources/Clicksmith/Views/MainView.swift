@@ -2,64 +2,6 @@ import SwiftUI
 import AppKit
 import ClicksmithCore
 
-// MARK: - Health (1.2.6): one source of truth for the header, setup card, engine and mice
-
-enum Health: Equatable {
-    case ready
-    case paused(emergency: Bool)
-    case needsSetup(missing: Int)
-    case noMouse
-    case stopped
-}
-
-extension AppState {
-    var inputMonitoringGranted: Bool { status?.inputMonitoring == "granted" }
-    var accessibilityGranted: Bool { status?.accessibility == true }
-    var missingPermissions: Int {
-        guard engineRunning else { return 0 }
-        return (inputMonitoringGranted ? 0 : 1) + (accessibilityGranted ? 0 : 1)
-    }
-
-    var health: Health {
-        if !engineRunning { return .stopped }
-        if missingPermissions > 0 { return .needsSetup(missing: missingPermissions) }
-        if status?.emergencyPaused == true { return .paused(emergency: true) }
-        if config.settings.paused { return .paused(emergency: false) }
-        if connectedMice.isEmpty { return .noMouse }
-        return .ready
-    }
-
-    var healthVisual: EngineVisualState {
-        switch health {
-        case .ready: return .active
-        case .paused, .needsSetup, .noMouse: return .paused
-        case .stopped: return .stopped
-        }
-    }
-
-    var healthTitle: String {
-        switch health {
-        case .ready: return "Forging clicks"
-        case .paused(let emergency): return emergency ? "Emergency pause" : "Paused"
-        case .needsSetup: return "Setup needed"
-        case .noMouse: return "No mouse"
-        case .stopped: return config.settings.engineEnabled ? "Engine stopped" : "Engine off"
-        }
-    }
-
-    var healthDetail: String {
-        switch health {
-        case .ready:
-            let n = config.mappings.filter(\.enabled).count
-            return n == 1 ? "1 button active" : "\(n) buttons active"
-        case .paused(let emergency): return emergency ? "Press Resume to continue" : "Mappings are paused"
-        case .needsSetup(let missing): return missing == 1 ? "1 permission missing" : "\(missing) permissions missing"
-        case .noMouse: return "Connect a mouse to start"
-        case .stopped: return "Start the engine to use your buttons"
-        }
-    }
-}
-
 // MARK: - Shell
 
 /// Custom sidebar (four sections, Clicksmith accent) running under the transparent title bar.
@@ -100,7 +42,7 @@ private struct Sidebar: View {
             Spacer()
             HStack(spacing: Space.s) {
                 LogoImage(size: 18)
-                Text("Clicksmith \(ClicksmithInfo.version)").font(.caption).foregroundStyle(.secondary)
+                Text("Clicksmith \(ClicksmithInfo.displayVersion)").font(.caption).foregroundStyle(.secondary)
             }
             .padding(.horizontal, Space.s)
         }
@@ -177,10 +119,7 @@ struct OverviewView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: 1040, alignment: .leading)
-            .padding(.horizontal, Space.page)
-            .padding(.vertical, Space.xl)
-            .frame(maxWidth: .infinity)
+            .pageFrame()
         }
         .sheet(isPresented: $showNewMapping) { NewMappingSheet().tint(Color.ember) }
         .sheet(item: $editing) { (m: ButtonMapping) in MappingEditor(mapping: m, isNew: false).tint(Color.ember) }
@@ -206,7 +145,7 @@ struct OverviewView: View {
         }
     }
 
-    // MARK: Setup (replaces separate permission banners)
+    // MARK: Setup
 
     private var setupCard: some View {
         VStack(alignment: .leading, spacing: Space.m) {
@@ -428,7 +367,7 @@ struct OverviewView: View {
                    actionTitle: "Resume") { state.resumeFromEmergency() }
         }
         if let v = state.engineVersionMismatch {
-            Banner(kind: .info, text: "The engine is still version \(v). Restart it to use Clicksmith \(ClicksmithInfo.version).",
+            Banner(kind: .info, text: "The engine is still version \(v). Restart it to use Clicksmith \(ClicksmithInfo.displayVersion).",
                    actionTitle: "Restart") { restartEngine() }
         }
         if let e = state.configLoadError { Banner(kind: .error, text: e) }

@@ -359,6 +359,11 @@ final class Engine: NSObject {
                 EngineLog.write("Open app: \(bundleID) is not installed")
                 return
             }
+            // 2.0: only apps installed in an Applications or system folder.
+            guard AppLocationPolicy.isAllowed(path: url.path, home: NSHomeDirectory()) else {
+                EngineLog.write("Open app refused: \(bundleID) is not in an Applications folder")
+                return
+            }
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in

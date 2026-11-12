@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # Build steps shared by build-app.sh and install.sh. Run from the repository root.
 
-CS_VERSION="1.2.6"
-CS_BUILD="${BUILD_NUMBER:-11}"
+CS_VERSION="2.0.0"
+CS_BUILD="${BUILD_NUMBER:-20}"
 CS_SIGN="${SIGN_IDENTITY:--}"
 CS_APP="build/Clicksmith.app"
 CS_ENGINE="$CS_APP/Contents/Library/LoginItems/Clicksmith Engine.app"
