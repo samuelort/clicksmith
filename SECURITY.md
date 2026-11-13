@@ -23,3 +23,22 @@ Clicksmith is local-only and has no networking or telemetry subsystem.
 ## Reporting a vulnerability
 
 Please use GitHub's private Security Advisory flow rather than a public issue.
+
+
+## Safe use and limitations
+
+Clicksmith can change mouse-button behaviour and generate keyboard input. Test new mappings in a non-critical application before relying on them. Keep an independent way to disable the app or stop its input engine.
+
+Use the software only on devices and systems where you have authorization. Do not use it for covert monitoring, unauthorized automation, or interference with another user's system.
+
+Do not store passwords, authentication codes, or other secrets in text snippets. Treat exported configurations and diagnostic reports as potentially sensitive and review them before sharing.
+
+The project is experimental. Device support, operating-system compatibility, and recovery behaviour must be verified for the specific release and environment. Documentation and planned features are not evidence of completed testing.
+
+See [Disclaimer](DISCLAIMER.md) and the repository's [License](LICENSE).
+
+## Reporting a vulnerability
+
+Do not post credentials, private configuration files, or exploit details in a public issue. If this repository has GitHub private vulnerability reporting enabled, use the Security tab to report privately. Otherwise, ask the maintainer to provide a private reporting channel before sharing sensitive details.
+
+No response time, security maintenance period, or remediation deadline is guaranteed unless explicitly published by the maintainer.

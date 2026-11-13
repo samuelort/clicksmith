@@ -104,3 +104,12 @@ Please include your Mac model, macOS version, mouse model and connection, the bu
 - Windows version as a native sibling with the same design
 
 MIT License.
+
+
+## Experimental software
+
+Clicksmith is provided as is, without warranty. It can alter mouse behaviour and generate keyboard input. Test carefully, keep backups, and use only where authorized. See [License](LICENSE), [Disclaimer](DISCLAIMER.md), and [Security](SECURITY.md).
+
+## Future development
+
+Notification-driven lighting is an exploratory idea, not an available or promised feature. See the [post-2.0 roadmap](docs/ROADMAP-POST-2.0.md).
