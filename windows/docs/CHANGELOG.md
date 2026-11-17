@@ -1,14 +1,35 @@
 # Changelog (Windows)
 
+## 2.5.0 Beta 1 — install like an app, feel like one
+
+### Install and update
+- **Prebuilt releases** for x64 and ARM64 — no .NET SDK or building needed.
+- **One-line terminal install** (`irm … | iex`): downloads the newest release, verifies SHA-256, runs the forge installer.
+- **Setup.exe** (per user, no administrator rights) with Nordic wizard artwork, runtime check, setup backup and the previous version kept.
+- **In-app update:** Settings › Updates › Download and install — verified package, setup backup, automatic rollback.
+- The two installers replace each other cleanly (one Apps & features entry).
+
+### Reliability and performance
+- The mouse hook now runs on its **own input thread** that does nothing but decide; file writes, logging, config loading and app lookups moved to other threads, so Windows has no reason to drop the hook.
+- All decision logic (taps, holds, test mode, Find a button) moved into a tested `ButtonRouter`; **13 simulated-press tests** cover it.
+- App lookups cached per process; status writes coalesced; no drop shadows (smoother scrolling).
+
+### Design and usability
+- **Every control in the Nordic style:** buttons, switches, drop-downs, sliders, scroll bars, menus, tooltips, text fields, dialog title bars and the tray menu — in light and dark mode.
+- **Real controls** everywhere: keyboard focus ring, Enter/Space, Narrator names; focus and scroll position survive page updates.
+- **New mapping starts with “press the button”**, with a list as fallback.
+- **Mice card** shows the mice Windows sees; **welcome guide** on first start; **real app icons**; editor sizes to the screen.
+
+### DPI and extra buttons
+- **Extra buttons (F13–F24):** turns a key sent by the mouse's own software into a full button, with app rules and hold actions.
+- **DPI probe** (read-only) in Settings › Diagnostics checks whether a mouse exposes a readable vendor channel.
+
+### Security
+- **Open app** no longer allows the Windows folder and refuses shells and script hosts (cmd, PowerShell, wscript, mshta, rundll32 …) everywhere.
+- **Type text** is skipped when a password field has focus (UI Automation), not only on sign-in prompts.
+
+### Tests
+- 99 self-tests (up from 69).
+
 ## 2.4.0 Beta 1 — first Windows build
-
-Brings Clicksmith to Windows with the macOS 2.0 design and rules, plus the 2.1–2.4 roadmap.
-
-- **Core:** five buttons, shortcuts, media keys, open app, type text, disable; per-app actions; repeat guard; refresh after sleep/unlock; emergency pause (Ctrl+Alt+Shift+F12).
-- **2.1 — easy and safe:** test mode (see what a press would do, without doing it), find a button, five editable suggestions, “Why isn't my button working?” checklist, undo delete, automatic backups with preview and restore.
-- **2.2 — hold for a second action:** 250–1500 ms, tap and hold never both, cancelled safely on pause, app/profile switch and sleep.
-- **2.3 — profiles:** create, rename, duplicate, delete and switch (Overview, Settings, tray); export/import with a preview.
-- **2.4 — easy updates:** release check, setup backup, previous version kept, automatic rollback, `rollback.cmd`, opt-in update check, versioned settings with tested migration.
-- **Design:** Nordic palette in light and dark mode, custom title bar, four-section sidebar, crisp icon from 16 px.
-- **Installer:** forge animation, step loader with progress bar, failure summary with automatic rollback, Start menu and Apps & features entries, no administrator rights.
-- **Tests:** 69 self-tests run during every install and on GitHub.
+Core remapping, per-app actions, hold actions, profiles, test mode, backups, safe source updates, forge installer.

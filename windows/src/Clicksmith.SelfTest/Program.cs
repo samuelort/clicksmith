@@ -182,7 +182,7 @@ Check("semver order", () => SemanticVersion.Parse("2.4.0")!.CompareTo(SemanticVe
 Check("prerelease before release", () => SemanticVersion.Parse("2.4.0-beta.1")!.CompareTo(SemanticVersion.Parse("2.4.0")) < 0);
 Check("beta.2 after beta.1", () => SemanticVersion.Parse("2.4.0-beta.2")!.CompareTo(SemanticVersion.Parse("2.4.0-beta.1")) > 0);
 Check("reject leading zeros", () => SemanticVersion.Parse("2.04.0") is null);
-Check("newer windows tag detected", () => UpdatePolicy.IsNewer("windows-v2.4.1", "2.4.0-beta.1"));
+Check("newer windows tag detected", () => UpdatePolicy.IsNewer("windows-v2.5.0", "2.5.0-beta.1"));
 Check("macOS tag ignored", () => !UpdatePolicy.IsNewer("v9.0.0", "2.4.0"));
 Check("same version not newer", () => !UpdatePolicy.IsNewer("windows-v2.4.0", "2.4.0"));
 Check("manifest rejects unsafe name", () => Throws<UpdateException>(() => new ReleaseManifest { Version = "2.4.0", Artifact = "../x.zip", Sha256 = new string('a', 64) }.Validate()));
@@ -194,6 +194,126 @@ Check("manifest verifies checksum", () =>
     new ReleaseManifest { Version = "2.4.1", Artifact = "pkg.zip", Sha256 = hash }.VerifyFile(f);
     return Throws<UpdateException>(() => new ReleaseManifest { Version = "2.4.1", Artifact = "pkg.zip", Sha256 = new string('0', 64) }.VerifyFile(f));
 });
+
+// --- Router: simulated presses (the engine's real decision logic) ---
+RouterSnapshot Snap(ClicksmithConfig c, string? app = null, bool active = true, Guid? identify = null, Guid? test = null) => new()
+{
+    Config = new CompiledConfig(c), Active = active, App = app,
+    IdentifyId = identify, IdentifyUntilMs = identify is null ? 0 : long.MaxValue,
+    TestId = test, TestUntilMs = test is null ? 0 : long.MaxValue
+};
+var backT = new Trigger(ClickButton.Back);
+var fwdT = new Trigger(ClickButton.Forward);
+var holdCfg = ClicksmithConfig.CreateDefault();
+holdCfg.ActiveProfile.Mappings.Add(back);
+holdCfg.ActiveProfile.Mappings.Add(new ButtonMapping { Label = "Forward", Button = ClickButton.Forward, DefaultAction = screenshot, LongPressAction = mute, LongPressMs = 500 });
+
+Check("router: mapped press runs action and blocks", () =>
+{
+    var r = new ButtonRouter(); var d = r.OnInput(backT, true, 1000, Snap(holdCfg));
+    var u = r.OnInput(backT, false, 1050, Snap(holdCfg));
+    return d.Swallow && d.Action == screenshot && u.Swallow && u.Action is null;
+});
+Check("router: Teams override used in Teams", () => new ButtonRouter().OnInput(backT, true, 0, Snap(holdCfg, "ms-teams.exe")).Action == mute);
+Check("router: unmapped button passes through", () =>
+{
+    var r = new ButtonRouter(); var d = r.OnInput(new Trigger(ClickButton.Middle), true, 0, Snap(holdCfg));
+    return !d.Swallow && d.Action is null && !r.OnInput(new Trigger(ClickButton.Middle), false, 10, Snap(holdCfg)).Swallow;
+});
+Check("router: paused passes through", () => !new ButtonRouter().OnInput(backT, true, 0, Snap(holdCfg, active: false)).Swallow);
+Check("router: tap fires tap action on release", () =>
+{
+    var r = new ButtonRouter(); var s0 = Snap(holdCfg);
+    var d = r.OnInput(fwdT, true, 1000, s0);
+    return d.Swallow && d.Action is null && r.Tick(1200) is null && r.OnInput(fwdT, false, 1200, s0).Action == screenshot;
+});
+Check("router: hold fires hold action once, never tap", () =>
+{
+    var r = new ButtonRouter(); var s0 = Snap(holdCfg);
+    r.OnInput(fwdT, true, 1000, s0);
+    var a1 = r.Tick(1510); var a2 = r.Tick(1600);
+    var up = r.OnInput(fwdT, false, 1700, s0);
+    return a1 == mute && a2 is null && up.Swallow && up.Action is null && !r.HasPending;
+});
+Check("router: cancel during hold fires nothing, release still swallowed", () =>
+{
+    var r = new ButtonRouter(); var s0 = Snap(holdCfg);
+    r.OnInput(fwdT, true, 0, s0); r.Cancel();
+    var up = r.OnInput(fwdT, false, 900, s0);
+    return up.Swallow && up.Action is null && r.Tick(1000) is null;
+});
+Check("router: reset forgets held buttons", () =>
+{
+    var r = new ButtonRouter(); var s0 = Snap(holdCfg);
+    r.OnInput(backT, true, 0, s0); r.Reset();
+    return !r.OnInput(backT, false, 10, s0).Swallow;
+});
+Check("router: repeat guard drops a bounce", () =>
+{
+    var r = new ButtonRouter(150); var s0 = Snap(holdCfg);
+    var a = r.OnInput(backT, true, 0, s0).Action; r.OnInput(backT, false, 20, s0);
+    var b = r.OnInput(backT, true, 60, s0).Action;
+    return a is not null && b is null;
+});
+Check("router: test mode reports and never runs", () =>
+{
+    var r = new ButtonRouter(); var id = Guid.NewGuid();
+    var d = r.OnInput(backT, true, 0, Snap(holdCfg, "ms-teams.exe", test: id));
+    return d.Action is null && d.Swallow && d.Result!.Kind == "test" && d.Result.Summary.Contains("Ctrl+Shift+M");
+});
+Check("router: test mode works while paused", () =>
+    new ButtonRouter().OnInput(backT, true, 0, Snap(holdCfg, active: false, test: Guid.NewGuid())).Result is not null);
+Check("router: identify reports once, then normal", () =>
+{
+    var r = new ButtonRouter(); var id = Guid.NewGuid(); var s0 = Snap(holdCfg, identify: id);
+    var first = r.OnInput(fwdT, true, 0, s0); r.OnInput(fwdT, false, 10, s0);
+    var second = r.OnInput(backT, true, 400, s0);
+    return first.Result?.Kind == "identified" && first.Result.Button == ClickButton.Forward && first.Action is null && second.Result is null && second.Action is not null;
+});
+Check("router: identify ignores left click", () =>
+    new ButtonRouter().OnInput(new Trigger(ClickButton.Left), true, 0, Snap(holdCfg, identify: Guid.NewGuid())).Result is null);
+
+// --- Extra buttons (F13–F24) ---
+var dpi = new ButtonMapping { Label = "DPI Button", Button = ClickButton.Key, TriggerVk = 0x7C, DefaultAction = screenshot };
+var keyCfg = ClicksmithConfig.CreateDefault(); keyCfg.ActiveProfile.Mappings.Add(dpi); keyCfg.ActiveProfile.Mappings.Add(back);
+Check("extra key: valid config", () => { ConfigCodec.Validate(keyCfg); return true; });
+Check("extra key: listed for hot keys", () => new CompiledConfig(keyCfg).ExtraKeys.SequenceEqual(new ushort[] { 0x7C }));
+Check("extra key: resolves and runs", () => new ButtonRouter().OnInput(new Trigger(ClickButton.Key, 0x7C), true, 0, Snap(keyCfg)).Action == screenshot);
+Check("extra key: F13 name", () => new Trigger(ClickButton.Key, 0x7C).ToString() == "F13");
+Check("extra key: rejects non-F13–F24", () => { var c = keyCfg.Clone(); c.ActiveProfile.Mappings[0].TriggerVk = 0x41; return Throws<ConfigException>(() => ConfigCodec.Validate(c)); });
+Check("extra key: mouse buttons can't have a key", () => { var c = keyCfg.Clone(); c.ActiveProfile.Mappings[1].TriggerVk = 0x7C; return Throws<ConfigException>(() => ConfigCodec.Validate(c)); });
+Check("extra key: two different F-keys allowed", () =>
+{
+    var c = keyCfg.Clone(); c.ActiveProfile.Mappings.Add(new ButtonMapping { Label = "DPI 2", Button = ClickButton.Key, TriggerVk = 0x7D, DefaultAction = mute });
+    ConfigCodec.Validate(c); return true;
+});
+Check("extra key: same F-key twice rejected", () =>
+{
+    var c = keyCfg.Clone(); c.ActiveProfile.Mappings.Add(new ButtonMapping { Label = "Again", Button = ClickButton.Key, TriggerVk = 0x7C, DefaultAction = mute });
+    return Throws<ConfigException>(() => ConfigCodec.Validate(c));
+});
+Check("extra key: hold works via router", () =>
+{
+    var c = keyCfg.Clone(); c.ActiveProfile.Mappings[0].LongPressAction = mute;
+    var r = new ButtonRouter(); var s0 = Snap(c); var t = new Trigger(ClickButton.Key, 0x7C);
+    r.OnInput(t, true, 0, s0); var a = r.Tick(600); return a == mute && r.OnInput(t, false, 700, s0).Action is null;
+});
+Check("app path must be .exe", () => { var c = config.Clone(); c.ActiveProfile.Mappings[0].Overrides[0].Path = "C:\\x\\teams.lnk"; return Throws<ConfigException>(() => ConfigCodec.Validate(c)); });
+
+// --- Open app: shells and script hosts refused everywhere ---
+Check("open app refuses PowerShell in Program Files", () => !AppLocationPolicy.IsAllowed(Path.Combine(pf, "PowerShell", "7", "pwsh.exe"), new[] { pf }));
+Check("open app refuses cmd.exe", () => !AppLocationPolicy.IsAllowed(Path.Combine(pf, "cmd.exe"), new[] { pf }));
+Check("Windows folder not a default root", () => !AppLocationPolicy.DefaultRoots().Any(r =>
+    !string.IsNullOrEmpty(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) &&
+    string.Equals(Path.GetFullPath(r).TrimEnd('\\', '/'), Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.Windows)).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)));
+
+// --- 2.4 release index ---
+var indexJson = Encoding.UTF8.GetBytes("{\"version\":\"2.5.0\",\"artifacts\":[{\"arch\":\"win-x64\",\"file\":\"Clicksmith-2.5.0-win-x64.zip\",\"sha256\":\"" + new string('a', 64) + "\",\"size\":100}]}");
+Check("release index picks the right package", () => ReleaseIndex.Parse(indexJson).Pick("win-x64").Artifact == "Clicksmith-2.5.0-win-x64.zip");
+Check("release index: missing arch is an error", () => Throws<UpdateException>(() => ReleaseIndex.Parse(indexJson).Pick("win-arm64")));
+Check("release index: rejects junk", () => Throws<UpdateException>(() => ReleaseIndex.Parse("[1,2]"u8.ToArray())));
+Check("release index: rejects unsafe file", () =>
+    Throws<UpdateException>(() => ReleaseIndex.Parse(Encoding.UTF8.GetBytes("{\"version\":\"2.5.0\",\"artifacts\":[{\"arch\":\"win-x64\",\"file\":\"..\\\\evil.zip\",\"sha256\":\"" + new string('a', 64) + "\"}]}")).Pick("win-x64")));
 
 // --- 2.1 history (real files in a temp folder) ---
 Check("save creates no backup the first time", () => { ConfigStore.Save(config); return ConfigurationHistory.List().Count == 0; });

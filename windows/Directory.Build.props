@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>2.4.0-beta.1</Version>
+    <Version>2.5.0-beta.1</Version>
     <Product>Clicksmith for Windows</Product>
     <Company>Clicksmith contributors</Company>
     <Copyright>© 2026 Clicksmith contributors. MIT License.</Copyright>
@@ -9,6 +9,8 @@
     <!-- Lets CI on non-Windows hosts compile the Windows projects. Harmless on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RollForward>Major</RollForward>
+    <!-- Keep ProductVersion clean (no +commit suffix) so installers can compare versions. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>

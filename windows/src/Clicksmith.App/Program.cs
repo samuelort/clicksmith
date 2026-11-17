@@ -21,6 +21,10 @@ internal static class Program
         }
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("pack://application:,,,/Clicksmith;component/Themes/Nordic.xaml", UriKind.Absolute)
+        });
         Theme.Apply(Theme.SystemDark());
         var state = AppState.Shared;
         var window = new MainWindow();
@@ -37,7 +41,7 @@ internal static class Program
         if (state.Config.Settings.EngineEnabled && !state.EngineRunning)
             state.EngineMessage = state.Engine.Start();
 
-        var startHidden = args.Contains("--tray") && state.Config.Settings.ShowTrayIcon;
+        var startHidden = args.Contains("--tray") && state.Config.Settings.ShowTrayIcon && state.Config.Settings.OnboardingCompleted;
         if (!startHidden) window.ShowAndActivate();
 
         if (state.Config.Settings.CheckForUpdatesOnStart)

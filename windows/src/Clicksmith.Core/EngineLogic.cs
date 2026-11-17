@@ -2,8 +2,8 @@ namespace Clicksmith.Core;
 
 public static class ClicksmithInfo
 {
-    public const string Version = "2.4.0-beta.1";
-    public const string DisplayVersion = "2.4 Beta 1";
+    public const string Version = "2.5.0-beta.1";
+    public const string DisplayVersion = "2.5 Beta 1";
     public const string EngineProcessName = "Clicksmith.Engine";
     public const string AppProcessName = "Clicksmith";
     public const string Repository = "samuelort/clicksmith";
@@ -16,33 +16,40 @@ public static class ClicksmithInfo
 /// <summary>What the engine does with one physical button in the current app.</summary>
 public sealed record ResolvedButton(Guid MappingId, string Label, ButtonAction? Short, ButtonAction? Long, int ThresholdMs, bool Block);
 
-/// <summary>Resolved once per config load / app switch — never per click.</summary>
+/// <summary>Resolved once per config load / app switch — never per click. Immutable, so the input
+/// thread can read it while the control thread builds the next one.</summary>
 public sealed class CompiledConfig
 {
-    private readonly Dictionary<ClickButton, ButtonMapping> _map;
+    private readonly Dictionary<Trigger, ButtonMapping> _map;
     public EngineSettings Settings { get; }
     public string ProfileName { get; }
     public int ActiveMappings => _map.Count;
+    /// <summary>F13–F24 keys used by extra buttons in the active profile.</summary>
+    public IReadOnlyList<ushort> ExtraKeys { get; }
 
     public CompiledConfig(ClicksmithConfig c)
     {
         Settings = c.Settings;
         var p = c.ActiveProfile;
         ProfileName = p.Name;
-        _map = new Dictionary<ClickButton, ButtonMapping>();
+        _map = new Dictionary<Trigger, ButtonMapping>();
         foreach (var m in p.Mappings.Where(m => m.Enabled))
-            _map.TryAdd(m.Button, m);
+            _map.TryAdd(m.Trigger, m);
+        ExtraKeys = _map.Keys.Where(t => t.IsKey).Select(t => t.Vk).Distinct().OrderBy(v => v).ToList();
     }
 
-    public ResolvedButton? Resolve(ClickButton b, string? app)
+    public ResolvedButton? Resolve(ClickButton b, string? app) => Resolve(new Trigger(b), app);
+
+    public ResolvedButton? Resolve(Trigger t, string? app)
     {
-        if (!_map.TryGetValue(b, out var m)) return null;
+        if (!_map.TryGetValue(t, out var m)) return null;
         var a = m.ActionFor(app);
         var shortAction = a is { } x && x.Fires ? x : null;
-        var canBlock = !ClickButtons.IsPrimary(b) || Settings.AllowPrimarySuppression;
+        var canBlock = t.IsKey || !ClickButtons.IsPrimary(t.Button) || Settings.AllowPrimarySuppression;
         var longAction = m.HasLongPress && canBlock ? m.LongPressAction : null;
         // A long press always needs the original press held back until we know which it was.
-        var block = canBlock && (m.BlockOriginal || longAction is not null);
+        // Extra keys are always consumed (they are registered as hot keys).
+        var block = t.IsKey || canBlock && (m.BlockOriginal || longAction is not null);
         if (shortAction is null && longAction is null && !block) return null;
         return new ResolvedButton(m.Id, m.Label, shortAction, longAction, m.LongPressMs, block);
     }
@@ -114,13 +121,15 @@ public sealed class LongPressTracker<TAction> where TAction : class
 public sealed class PressGuard
 {
     private readonly long _intervalMs;
-    private readonly Dictionary<ClickButton, long> _last = new();
+    private readonly Dictionary<Trigger, long> _last = new();
     public PressGuard(int intervalMs) => _intervalMs = Math.Max(0, intervalMs);
 
-    public bool Allow(ClickButton b, long nowMs)
+    public bool Allow(ClickButton b, long nowMs) => Allow(new Trigger(b), nowMs);
+
+    public bool Allow(Trigger t, long nowMs)
     {
-        if (_last.TryGetValue(b, out var l) && nowMs - l < _intervalMs) return false;
-        _last[b] = nowMs;
+        if (_last.TryGetValue(t, out var l) && nowMs - l < _intervalMs) return false;
+        _last[t] = nowMs;
         return true;
     }
 }
@@ -140,16 +149,23 @@ public static class HealthModel
     }
 }
 
-/// <summary>"Open app" only launches programs installed in trusted folders.</summary>
+/// <summary>"Open app" only launches programs installed in the normal program folders, and never
+/// shells or script hosts (which would let a snippet of config run arbitrary commands).</summary>
 public static class AppLocationPolicy
 {
+    private static readonly HashSet<string> Denied = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cmd.exe", "powershell.exe", "pwsh.exe", "powershell_ise.exe", "wscript.exe", "cscript.exe", "mshta.exe",
+        "rundll32.exe", "regsvr32.exe", "msiexec.exe", "wsl.exe", "bash.exe", "conhost.exe", "wt.exe",
+        "schtasks.exe", "reg.exe", "certutil.exe", "bitsadmin.exe", "installutil.exe", "msbuild.exe"
+    };
+
     public static string[] DefaultRoots() => new[]
     {
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps"),
-        Environment.GetFolderPath(Environment.SpecialFolder.Windows)
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps")
     }.Where(r => !string.IsNullOrWhiteSpace(r)).ToArray();
 
     public static bool IsAllowed(string path, IEnumerable<string> roots)
@@ -158,6 +174,7 @@ public static class AppLocationPolicy
         string full;
         try { full = Path.GetFullPath(path); } catch { return false; }
         if (!full.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return false;
+        if (Denied.Contains(Path.GetFileName(full))) return false;
         foreach (var root in roots)
         {
             string r;

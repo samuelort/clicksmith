@@ -1,7 +1,7 @@
 name: Windows
 on:
   push:
-    paths: ['windows/**', '.github/workflows/windows.yml']
+    paths: ['windows/**', '.github/workflows/windows*.yml']
   pull_request:
     paths: ['windows/**']
 jobs:
@@ -10,6 +10,7 @@ jobs:
     defaults:
       run:
         working-directory: windows
+        shell: pwsh
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -19,16 +20,24 @@ jobs:
         run: |
           dotnet build src/Clicksmith.SelfTest/Clicksmith.SelfTest.csproj -c Release -nologo
           dotnet src/Clicksmith.SelfTest/bin/Release/net8.0/Clicksmith.SelfTest.dll
-      - name: Build engine and app
+      - name: Build engine, app and DPI probe
         run: |
-          dotnet publish src/Clicksmith.Engine/Clicksmith.Engine.csproj -c Release -r win-x64 --self-contained false -o build/out -nologo
-          dotnet publish src/Clicksmith.App/Clicksmith.App.csproj -c Release -r win-x64 --self-contained false -o build/out -nologo
-      - name: Release check
-        shell: pwsh
+          foreach ($p in 'Clicksmith.Engine','Clicksmith.App','Clicksmith.DpiProbe') {
+            dotnet publish "src/$p/$p.csproj" -c Release -r win-x64 --self-contained false -o build/out -nologo
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Release check (MANIFEST.sha256)
         run: |
           . ./scripts/lib/common.ps1
           Test-ReleaseFiles
+      - name: Script syntax
+        run: |
+          foreach ($f in Get-ChildItem scripts, . -Filter *.ps1 -Recurse) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Error "$($f.Name): $_" }; exit 1 }
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: Clicksmith-Windows
+          name: Clicksmith-Windows-build
           path: windows/build/out

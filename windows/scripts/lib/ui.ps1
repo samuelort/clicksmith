@@ -190,7 +190,9 @@ function Invoke-ProcessStep([string]$label, [string]$file, [string]$arguments) {
     $out = [IO.Path]::GetTempFileName()
     $err = [IO.Path]::GetTempFileName()
     try {
-        $p = Start-Process -FilePath $file -ArgumentList $arguments -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $err -WorkingDirectory (Get-Location).Path
+        $spArgs = @{ FilePath = $file; NoNewWindow = $true; PassThru = $true; RedirectStandardOutput = $out; RedirectStandardError = $err; WorkingDirectory = (Get-Location).Path }
+        if ($arguments) { $spArgs.ArgumentList = $arguments }
+        $p = Start-Process @spArgs
         $null = $p.Handle  # makes ExitCode reliable in Windows PowerShell
         $n = 0
         if ($script:Vt) { Write-Raw "$($script:Esc)[?25l" }

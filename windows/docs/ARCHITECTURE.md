@@ -1,23 +1,38 @@
 # Architecture (Windows)
 
-| Process | Role | Needs |
+| Process / part | Role | Needs |
 |---|---|---|
-| `Clicksmith.exe` (WPF) | Window, tray icon, settings, editor, diagnostics | Nothing special |
-| `Clicksmith.Engine.exe` (hidden) | Mouse hook, actions, long press, test mode, sleep recovery | Runs as you; no admin, no driver |
-| `Clicksmith.Core.dll` | Settings model, validation, migrations, rules, long press, updates | Pure .NET, self-tested |
+| `Clicksmith.exe` (WPF) | Window, tray, settings, editor, diagnostics, updates | Nothing special |
+| `Clicksmith.Engine.exe` (hidden) | Input and actions | Runs as you; no admin, no driver |
+| `Clicksmith.Core.dll` | Model, validation, migrations, `ButtonRouter`, updates | Pure .NET, self-tested |
+| `Clicksmith.DpiProbe.exe` | Read-only HID diagnostics | Nothing special |
 
-**Hot path:** `low-level mouse hook → button + down/up → resolved action for the app in front → queue`. The hook callback does no I/O, logging or UI work and returns at once; actions are sent from a separate thread with `SendInput`. Clicksmith's own injected input is marked and ignored.
+## Engine threads
 
-**Resolution** (`CompiledConfig`) happens on config load and app switch, never per click: exact app override → default → nothing. Switching between apps that have no overrides costs nothing.
+| Thread | Does | Never does |
+|---|---|---|
+| **Input** | Low-level mouse hook, F13–F24 hot keys, long-press timer, `ButtonRouter` | File I/O, logging, process lookups, waiting |
+| **Control** | Config (parsed on the thread pool), app in front, requests, emergency shortcut, sleep/unlock recovery, status | Mouse input |
+| **Actions** | `SendInput`, open app, type text (with password-field check) | Anything on the input path |
+| **File writer / log** | Coalesced atomic writes, log lines | — |
 
-**Long press (2.2):** a mapping with a hold action holds back the button's own press. A 15 ms timer runs only while a button is down; the hold action fires once at the threshold (250–1500 ms), otherwise the tap action fires on release. Pausing, switching profile or app, sleep and emergency pause cancel a pending press without firing; its release is still swallowed so no half-click reaches the app.
+The control thread publishes an immutable `RouterSnapshot` (compiled config, active, app in front, identify/test state); the input thread reads it with one volatile load per event. No locks on the input path.
 
-**Blocking:** side and middle buttons can be blocked; left/right only after an explicit opt-in, which forces the Ctrl+Alt+Shift+F12 emergency pause on. If the engine stops, Windows removes the hook and the mouse works normally again.
+## Decisions
 
-**Sleep and unlock:** Windows can silently drop a low-level hook. The engine installs a fresh hook, re-registers the emergency shortcut and re-reads the app in front after resume (configurable delay), after unlock, and every 15 minutes while idle.
+`ButtonRouter.OnInput(trigger, down, now, snapshot)` returns *swallow / action / result*:
+exact app override → default → nothing; repeat guard; a hold action holds the press back until it's clear whether it's a tap or a hold (250–1500 ms); test mode reports and never runs; Find a button reports and swallows the next press. Pause, app/profile switch, emergency and sleep cancel a pending press without firing, and its release is still swallowed.
 
-**Settings:** `%APPDATA%\Clicksmith\config.json`, schema 2 (profiles). Schema 1 (one implicit profile) is migrated automatically. Every save is validated, the previous file is copied to `Configuration Backups` (last 20), then written atomically. A failed backup aborts the save.
+## Extra buttons
 
-**IPC:** the app writes `config.json` and `engine-request.json` (identify, test mode, resume, reload, quit); the engine watches the folder and writes `engine-status.json` (heartbeat every 10 s) and `engine-result.json`. Files are size-limited and links are refused. No request can trigger an action.
+F13–F24 are registered as hot keys (only the keys in use, plus all of them briefly during Find a button). The press arrives as `WM_HOTKEY`; the release is read from the key state on the 15 ms timer, so holds work too.
 
-**Updates (2.4):** `update.cmd` pulls, verifies every file against `MANIFEST.sha256`, backs up the setup, moves the current install to `Clicksmith.previous`, installs, waits for the new engine to report in, and puts the previous version back automatically if any of that fails. The in-app check only reads public release metadata from GitHub (tags `windows-v*`) when you ask, or at start-up if enabled.
+## Recovery
+
+On resume (after a configurable delay), unlock, and every 15 minutes while idle, the input thread installs a fresh hook and re-registers hot keys; the control thread re-registers the emergency shortcut and re-reads the app in front.
+
+## Settings, IPC, updates
+
+`%APPDATA%\Clicksmith\config.json` (schema 2, profiles; schema 1 migrated). Each save is validated, the previous file goes to `Configuration Backups` (last 20), then an atomic write. The app writes `engine-request.json`; the engine writes `engine-status.json` (heartbeat 10 s) and `engine-result.json`. Files are size-limited; links are refused; no request can trigger an action.
+
+Releases contain `PACKAGE.sha256`; installers verify it, back up the setup, keep `Clicksmith.previous`, and restore it automatically if installing fails. `release-windows.json` lists each package's SHA-256 for the web installer and in-app updates.

@@ -23,6 +23,10 @@ public sealed class EngineStatus
     public int ActiveMappings { get; set; }
     public bool TestMode { get; set; }
     public string? LastError { get; set; }
+    /// <summary>F13–F24 keys registered for extra buttons.</summary>
+    public List<string> ExtraKeys { get; set; } = new();
+    /// <summary>Extra keys another app already uses (registration refused).</summary>
+    public List<string> ExtraKeysUnavailable { get; set; } = new();
 }
 
 public enum RequestKind { Identify, StartTest, StopTest, Resume, Reload, Quit }
@@ -41,6 +45,7 @@ public sealed class EngineResult
     public Guid RequestId { get; set; }
     public string Kind { get; set; } = "";
     public ClickButton? Button { get; set; }
+    public ushort Vk { get; set; }
     public string? App { get; set; }
     public string? MappingLabel { get; set; }
     public string? ShortDisplay { get; set; }

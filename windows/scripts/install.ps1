@@ -38,7 +38,7 @@ if ((Get-DotnetMajor) -lt 8) {
     Write-Line
 }
 
-$script:StepTotal = 13
+$script:StepTotal = 14
 $sln = Join-Path $script:Root 'src'
 $publish = "-c Release -r $rid --self-contained false -o `"$($script:BuildOut)`" -p:DebugType=None -p:DebugSymbols=false -nologo"
 
@@ -56,6 +56,7 @@ Invoke-ProcessStep 'Stress-testing the metal' 'dotnet' "`"$sln\Clicksmith.SelfTe
 Write-Note ([string](([string]$script:LastOutput -split "`n" | Where-Object { $_ -match 'Self-test' } | Select-Object -Last 1))).Trim()
 Invoke-ProcessStep 'Forging the input engine' 'dotnet' "publish `"$sln\Clicksmith.Engine\Clicksmith.Engine.csproj`" $publish"
 Invoke-ProcessStep 'Forging the settings app' 'dotnet' "publish `"$sln\Clicksmith.App\Clicksmith.App.csproj`" $publish"
+Invoke-ProcessStep 'Forging the DPI probe' 'dotnet' "publish `"$sln\Clicksmith.DpiProbe\Clicksmith.DpiProbe.csproj`" $publish"
 Invoke-Step 'Saving your setup' { Save-UserSetup }
 Write-Note $script:LastResult
 Invoke-Step 'Cooling the old version' { Stop-Clicksmith; 'stopped' }
@@ -79,4 +80,4 @@ Show-Box 'Next steps' @(
     'No permissions needed. Your setup is backed up on every change.',
     'Previous version kept for rollback:  .\rollback.cmd',
     'Health check:                        .\verify.cmd',
-    'Update later:                        .\update.cmd')
+    'Update later:                        .\update.cmd  (or Settings > Updates)')

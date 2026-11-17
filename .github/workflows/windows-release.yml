@@ -1,0 +1,50 @@
+name: Windows release
+# Push a tag like windows-v2.5.0-beta.1 (it must match Directory.Build.props) to publish:
+#   Clicksmith-<version>-win-x64.zip / -win-arm64.zip   prebuilt packages (install.cmd inside)
+#   Clicksmith-Setup-<version>.exe                      per-user installer (Inno Setup)
+#   release-windows.json + SHA256SUMS.txt               used by the web installer and in-app updates
+# Versions with a "-" (beta, rc) are published as pre-releases. Not code-signed.
+on:
+  push:
+    tags: ['windows-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build packages
+        run: ./scripts/build-release.ps1
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build Setup.exe
+        run: |
+          $v = Get-Content build/version.txt
+          $n = ($v -replace '-.*$', '') + '.0'
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$v" "/DNumericVersion=$n" "/DStage=..\build\pkg" "/DOutputDir=..\build\release" installer\Clicksmith.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Checksums
+        run: |
+          Get-ChildItem build/release -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content build/release/SHA256SUMS.txt -Encoding ascii
+          Get-Content build/release/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clicksmith-Windows-release
+          path: windows/build/release
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        with:
+          files: windows/build/release/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true

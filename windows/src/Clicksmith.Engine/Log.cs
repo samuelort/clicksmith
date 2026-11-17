@@ -1,32 +1,43 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
+using System.Threading;
 using Clicksmith.Core;
 
 namespace Clicksmith.Engine;
 
-/// <summary>Lifecycle and errors only. Never button presses or keystrokes.</summary>
+/// <summary>Lifecycle and errors only — never button presses or keystrokes. Queued and written on
+/// its own thread, so logging never blocks input.</summary>
 internal static class Log
 {
-    private static readonly object Gate = new();
-    private static string File => Path.Combine(ClicksmithPaths.Logs, "engine.log");
+    private static readonly BlockingCollection<string> Queue = new(512);
+    private static readonly Thread Worker = new(Run) { IsBackground = true, Name = "Clicksmith log", Priority = ThreadPriority.Lowest };
+    private static int _started;
+    private static string FilePath => Path.Combine(ClicksmithPaths.Logs, "engine.log");
 
     public static void Write(string message)
     {
-        try
+        if (Interlocked.Exchange(ref _started, 1) == 0) Worker.Start();
+        Queue.TryAdd($"{DateTimeOffset.Now:O} {message}");
+    }
+
+    private static void Run()
+    {
+        foreach (var line in Queue.GetConsumingEnumerable())
         {
-            lock (Gate)
+            try
             {
                 Directory.CreateDirectory(ClicksmithPaths.Logs);
-                var f = new FileInfo(File);
+                var f = new FileInfo(FilePath);
                 if (f.Exists && f.Length > 1_000_000)
                 {
-                    var old = File + ".old";
-                    if (System.IO.File.Exists(old)) System.IO.File.Delete(old);
-                    System.IO.File.Move(File, old);
+                    var old = FilePath + ".old";
+                    if (File.Exists(old)) File.Delete(old);
+                    File.Move(FilePath, old);
                 }
-                System.IO.File.AppendAllText(File, $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+                File.AppendAllText(FilePath, line + Environment.NewLine);
             }
+            catch { /* logging must never break the engine */ }
         }
-        catch { /* logging must never break the engine */ }
     }
 }

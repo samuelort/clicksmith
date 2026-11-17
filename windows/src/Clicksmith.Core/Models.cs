@@ -2,16 +2,29 @@ using System.Text.Json.Serialization;
 
 namespace Clicksmith.Core;
 
-/// <summary>The five buttons Windows exposes for every mouse.</summary>
-public enum ClickButton { Left = 0, Right = 1, Middle = 2, Back = 3, Forward = 4 }
+/// <summary>The five buttons Windows exposes for every mouse, plus <see cref="Key"/>: an extra mouse
+/// button (such as DPI) that the mouse's own software sends as F13–F24.</summary>
+public enum ClickButton { Left = 0, Right = 1, Middle = 2, Back = 3, Forward = 4, Key = 5 }
+
+/// <summary>What the engine listens for: a mouse button, or an extra key (Vk 0x7C–0x87 = F13–F24).</summary>
+public readonly record struct Trigger(ClickButton Button, ushort Vk = 0)
+{
+    public bool IsKey => Button == ClickButton.Key;
+    public override string ToString() => IsKey ? KeyNames.Name(Vk) : ClickButtons.Name(Button);
+}
 
 public static class ClickButtons
 {
     public static readonly ClickButton[] All =
         { ClickButton.Left, ClickButton.Right, ClickButton.Middle, ClickButton.Back, ClickButton.Forward };
 
+    public const ushort FirstExtraKey = 0x7C; // F13
+    public const ushort LastExtraKey = 0x87;  // F24
+    public static bool IsExtraKey(ushort vk) => vk is >= FirstExtraKey and <= LastExtraKey;
+
     public static string Name(ClickButton b) => b switch
     {
+        ClickButton.Key => "Extra button",
         ClickButton.Left => "Left click",
         ClickButton.Right => "Right click",
         ClickButton.Middle => "Middle click",
@@ -139,6 +152,8 @@ public sealed class AppOverride
     /// <summary>Executable file name, e.g. "ms-teams.exe". Compared case-insensitively.</summary>
     public string App { get; set; } = "";
     public string AppName { get; set; } = "";
+    /// <summary>Full path, only used to show the app's real icon. Optional.</summary>
+    public string? Path { get; set; }
     public ButtonAction Action { get; set; } = new();
     public bool Enabled { get; set; } = true;
 }
@@ -152,6 +167,11 @@ public sealed class ButtonMapping
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Label { get; set; } = "";
     public ClickButton Button { get; set; } = ClickButton.Back;
+    /// <summary>For <see cref="ClickButton.Key"/>: the F13–F24 key the mouse sends. 0 otherwise.</summary>
+    public ushort TriggerVk { get; set; }
+
+    [JsonIgnore]
+    public Trigger Trigger => new(Button, Button == ClickButton.Key ? TriggerVk : (ushort)0);
     public bool Enabled { get; set; } = true;
     /// <summary>Block the button's normal Windows action while this mapping applies.</summary>
     public bool BlockOriginal { get; set; } = true;

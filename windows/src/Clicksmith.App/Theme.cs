@@ -8,7 +8,8 @@ using Microsoft.Win32;
 namespace Clicksmith.App;
 
 /// <summary>Nordic palette taken from the app icon: warm paper, soft stone, one muted copper accent.
-/// Every colour has a light and dark value; the window rebuilds when Windows switches theme.</summary>
+/// Every colour has a light and dark value. Apply() also feeds the brushes to Themes/Nordic.xaml
+/// (DynamicResource), so every styled control follows light/dark mode live.</summary>
 internal static class Theme
 {
     public static bool Dark { get; private set; }
@@ -36,6 +37,18 @@ internal static class Theme
         Sub = B(dark ? (160, 153, 144) : (116, 110, 102));
         Line = B(dark ? (58, 55, 52) : (226, 221, 214));
         OnCopper = B(dark ? (30, 29, 27) : (255, 255, 255));
+
+        var r = Application.Current?.Resources;
+        if (r is not null)
+        {
+            r["Cs.Canvas"] = Canvas; r["Cs.Card"] = Card; r["Cs.Sidebar"] = Sidebar; r["Cs.Stone"] = Stone;
+            r["Cs.Copper"] = Copper; r["Cs.Sage"] = Sage; r["Cs.Amber"] = Amber; r["Cs.Clay"] = Clay;
+            r["Cs.Text"] = Text; r["Cs.Sub"] = Sub; r["Cs.Line"] = Line; r["Cs.OnCopper"] = OnCopper;
+            r["Cs.Hover"] = Soft(Stone, dark ? 0.12 : 0.09);
+            r["Cs.Pressed"] = Soft(Stone, dark ? 0.20 : 0.15);
+            r["Cs.CopperSoft"] = Soft(Copper, 0.16);
+            r["Cs.SwitchOff"] = Soft(Stone, dark ? 0.45 : 0.32);
+        }
         Changed?.Invoke();
     }
 
@@ -57,6 +70,8 @@ internal static class Theme
         s.Freeze();
         return s;
     }
+
+    public static int ColorRef(SolidColorBrush b) => b.Color.R | (b.Color.G << 8) | (b.Color.B << 16);
 
     private static SolidColorBrush B((byte R, byte G, byte B) c)
     {
@@ -86,5 +101,33 @@ internal static class Theme
             catch { _logo = null; }
             return _logo;
         }
+    }
+}
+
+/// <summary>Native title bars in the Clicksmith colours: dark title bar in dark mode (Windows 10/11),
+/// caption colour and rounded corners on Windows 11. Unsupported attributes are ignored by Windows.</summary>
+internal static class Chrome
+{
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    public static void Apply(Window w)
+    {
+        w.SourceInitialized += (_, _) => Paint(w);
+        if (new System.Windows.Interop.WindowInteropHelper(w).Handle != IntPtr.Zero) Paint(w);
+    }
+
+    public static void Paint(Window w)
+    {
+        var h = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+        if (h == IntPtr.Zero) return;
+        var dark = Theme.Dark ? 1 : 0;
+        DwmSetWindowAttribute(h, 20, ref dark, sizeof(int));        // DWMWA_USE_IMMERSIVE_DARK_MODE
+        var caption = Theme.ColorRef(Theme.Canvas);
+        DwmSetWindowAttribute(h, 35, ref caption, sizeof(int));     // DWMWA_CAPTION_COLOR (Windows 11)
+        var text = Theme.ColorRef(Theme.Text);
+        DwmSetWindowAttribute(h, 36, ref text, sizeof(int));        // DWMWA_TEXT_COLOR (Windows 11)
+        var round = 2;
+        DwmSetWindowAttribute(h, 33, ref round, sizeof(int));       // DWMWA_WINDOW_CORNER_PREFERENCE = round
     }
 }

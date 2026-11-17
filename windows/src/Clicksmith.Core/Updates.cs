@@ -90,3 +90,38 @@ public static class UpdatePolicy
         return remote is not null && local is not null && remote.CompareTo(local) > 0;
     }
 }
+
+public sealed class ReleaseArtifact
+{
+    public string Arch { get; set; } = "";
+    public string File { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+    public long Size { get; set; }
+}
+
+/// <summary>2.4: release-windows.json, published with every Windows release. Lists one prebuilt
+/// package per CPU architecture with its SHA-256. Treated strictly as data.</summary>
+public sealed class ReleaseIndex
+{
+    public string Version { get; set; } = "";
+    public List<ReleaseArtifact> Artifacts { get; set; } = new();
+
+    public static ReleaseIndex Parse(byte[] json)
+    {
+        if (json.Length > 64_000) throw new UpdateException("Release index is too large.");
+        ReleaseIndex? r;
+        try { r = System.Text.Json.JsonSerializer.Deserialize<ReleaseIndex>(json, Json.Options); }
+        catch (System.Text.Json.JsonException) { throw new UpdateException("Release index is not valid JSON."); }
+        if (r is null || SemanticVersion.Parse(r.Version) is null) throw new UpdateException("Release index has no valid version.");
+        return r;
+    }
+
+    /// <summary>The package for this PC (win-x64 or win-arm64), validated.</summary>
+    public ReleaseManifest Pick(string arch)
+    {
+        var a = Artifacts.FirstOrDefault(x => x.Arch == arch) ?? throw new UpdateException($"No package for {arch} in this release.");
+        var m = new ReleaseManifest { Version = Version, Artifact = a.File, Sha256 = a.Sha256 };
+        m.Validate();
+        return m;
+    }
+}

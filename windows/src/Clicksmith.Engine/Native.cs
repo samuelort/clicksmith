@@ -81,6 +81,9 @@ internal static class Native
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 

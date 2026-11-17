@@ -146,13 +146,17 @@ public static class ConfigCodec
         {
             if (string.IsNullOrWhiteSpace(p.Name) || p.Name.Length > 40) throw new ConfigException("Profile names need 1–40 characters.");
             if (p.Mappings is null || p.Mappings.Count > 64) throw new ConfigException($"{p.Name}: too many mappings.");
-            if (p.Mappings.Select(m => m.Button).Distinct().Count() != p.Mappings.Count)
+            if (p.Mappings.Select(m => m.Trigger).Distinct().Count() != p.Mappings.Count)
                 throw new ConfigException($"{p.Name}: each button can only be mapped once per profile.");
             foreach (var m in p.Mappings)
             {
                 var where = $"{p.Name} › {m.Label}";
                 if (string.IsNullOrWhiteSpace(m.Label) || m.Label.Length > 60) throw new ConfigException($"{p.Name}: a button needs a name (max 60 characters).");
                 if (!Enum.IsDefined(m.Button)) throw new ConfigException($"{where}: unknown button.");
+                if (m.Button == ClickButton.Key && !ClickButtons.IsExtraKey(m.TriggerVk))
+                    throw new ConfigException($"{where}: an extra button must use F13–F24.");
+                if (m.Button != ClickButton.Key && m.TriggerVk != 0)
+                    throw new ConfigException($"{where}: only extra buttons have a key.");
                 if (m.LongPressMs is < ButtonMapping.MinLongPressMs or > ButtonMapping.MaxLongPressMs)
                     throw new ConfigException($"{where}: hold time must be {ButtonMapping.MinLongPressMs}–{ButtonMapping.MaxLongPressMs} ms.");
                 if (m.Overrides is null || m.Overrides.Count > 64) throw new ConfigException($"{where}: too many app overrides.");
@@ -164,6 +168,8 @@ public static class ConfigCodec
                 {
                     if (o.App is null || !ExeName.IsMatch(o.App)) throw new ConfigException($"{where}: invalid app '{o.App}'.");
                     if (o.AppName is null || o.AppName.Length > 100) throw new ConfigException($"{where}: app name too long.");
+                    if (o.Path is not null && (o.Path.Length > 260 || !o.Path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
+                        throw new ConfigException($"{where}: invalid app path.");
                     CheckAction(o.Action ?? throw new ConfigException($"{where}: missing app action."), where + " in " + o.AppName);
                 }
                 if (m.Overrides.Select(o => o.App.ToLowerInvariant()).Distinct().Count() != m.Overrides.Count)

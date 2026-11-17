@@ -1,6 +1,8 @@
 # Shared paths and helpers for install, update, verify, rollback and uninstall.
 
-$script:Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# Works in the source tree (scripts\lib), a release package (scripts\lib) and an install (tools\lib).
+$script:ScriptsDir = Split-Path -Parent $PSScriptRoot
+$script:Root = Split-Path -Parent $script:ScriptsDir
 $script:InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\Clicksmith'
 $script:PreviousDir = Join-Path $env:LOCALAPPDATA 'Programs\Clicksmith.previous'
 $script:DataDir = Join-Path $env:APPDATA 'Clicksmith'
@@ -8,8 +10,12 @@ $script:BuildOut = Join-Path $script:Root 'build\out'
 $script:StartMenuLink = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Clicksmith.lnk'
 $script:RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $script:UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Clicksmith'
+# Setup.exe (Inno Setup) registers under its AppId; both installers remove the other's entry.
+$script:SetupUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F1C2C61-5D7A-4F5B-9F64-2B3E1C0A1D2C}_is1'
 
 function Get-ClicksmithVersion {
+    $file = Join-Path $script:Root 'VERSION'
+    if (Test-Path $file) { return (Get-Content $file -Raw).Trim() }
     $props = Join-Path $script:Root 'Directory.Build.props'
     if (-not (Test-Path $props)) { return 'unknown' }
     return ([xml](Get-Content $props -Raw)).Project.PropertyGroup.Version
@@ -47,6 +53,44 @@ function Test-ReleaseFiles {
         throw "$($bad.Count) file(s) differ from the release. Download a fresh copy, or use -Dev if you changed the code yourself."
     }
     "All $($expected.Count) files match the $(Get-ClicksmithVersion) release"
+}
+
+# Release packages: verify every file against PACKAGE.sha256 and refuse extras.
+function Test-PackageFiles {
+    $manifest = Join-Path $script:Root 'PACKAGE.sha256'
+    if (-not (Test-Path $manifest)) { throw 'PACKAGE.sha256 is missing - this is not a Clicksmith release package.' }
+    $expected = @{}
+    foreach ($line in Get-Content $manifest) {
+        if ($line -match '^([a-f0-9]{64})\s+\*?(.+)$') { $expected[$Matches[2].Trim()] = $Matches[1] }
+    }
+    $bad = @()
+    foreach ($rel in $expected.Keys) {
+        $path = Join-Path $script:Root ($rel -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $path)) { $bad += "missing: $rel"; continue }
+        if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected[$rel]) { $bad += "changed: $rel" }
+    }
+    foreach ($f in Get-ChildItem -Path (Join-Path $script:Root 'app'), (Join-Path $script:Root 'scripts') -Recurse -File -ErrorAction SilentlyContinue) {
+        $rel = $f.FullName.Substring($script:Root.Length + 1) -replace '\\', '/'
+        if (-not $expected.ContainsKey($rel)) { $bad += "extra: $rel" }
+    }
+    if ($bad.Count -gt 0) {
+        $bad | Select-Object -First 15 | ForEach-Object { Write-Output $_ }
+        throw "$($bad.Count) file(s) differ from the package. Download it again."
+    }
+    "All $($expected.Count) package files verified"
+}
+
+# .NET 8 Desktop Runtime (what the prebuilt app needs; the SDK includes it).
+function Test-DesktopRuntime {
+    foreach ($base in @("$env:ProgramFiles\dotnet", "$env:ProgramW6432\dotnet", "${env:ProgramFiles(x86)}\dotnet")) {
+        if (-not $base) { continue }
+        $dir = Join-Path $base 'shared\Microsoft.WindowsDesktop.App'
+        if (Test-Path $dir) {
+            $v = Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(\d+)\.' -and [int]$Matches[1] -ge 8 } | Select-Object -First 1
+            if ($v) { return $v.Name }
+        }
+    }
+    return $null
 }
 
 function Get-DotnetMajor {
@@ -91,20 +135,19 @@ function Save-UserSetup {
     "Setup backed up to Configuration Backups"
 }
 
-function Install-Files {
-    if (-not (Test-Path (Join-Path $script:BuildOut 'Clicksmith.exe'))) { throw 'Build output is missing Clicksmith.exe' }
-    if (-not (Test-Path (Join-Path $script:BuildOut 'Clicksmith.Engine.exe'))) { throw 'Build output is missing Clicksmith.Engine.exe' }
+function Install-Files([string]$From = $script:BuildOut) {
+    if (-not (Test-Path (Join-Path $From 'Clicksmith.exe'))) { throw 'Build output is missing Clicksmith.exe' }
+    if (-not (Test-Path (Join-Path $From 'Clicksmith.Engine.exe'))) { throw 'Build output is missing Clicksmith.Engine.exe' }
     if (Test-Path $script:InstallDir) {
         if (Test-Path $script:PreviousDir) { Remove-Item $script:PreviousDir -Recurse -Force }
         Move-Item -LiteralPath $script:InstallDir -Destination $script:PreviousDir
     }
     New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $script:BuildOut '*') -Destination $script:InstallDir -Recurse -Force
+    Copy-Item -Path (Join-Path $From '*') -Destination $script:InstallDir -Recurse -Force
     $tools = Join-Path $script:InstallDir 'tools'
     New-Item -ItemType Directory -Path $tools -Force | Out-Null
-    Copy-Item (Join-Path $script:Root 'scripts\uninstall.ps1') $tools -Force
-    Copy-Item (Join-Path $script:Root 'scripts\rollback.ps1') $tools -Force
-    Copy-Item (Join-Path $script:Root 'scripts\lib') $tools -Recurse -Force
+    foreach ($f in 'uninstall.ps1', 'rollback.ps1', 'verify.ps1') { Copy-Item (Join-Path $script:ScriptsDir $f) $tools -Force }
+    Copy-Item (Join-Path $script:ScriptsDir 'lib') $tools -Recurse -Force
     "Installed to $($script:InstallDir)"
 }
 
@@ -144,7 +187,8 @@ function Register-Clicksmith([string]$version) {
         Set-ItemProperty -Path $script:RunKey -Name 'Clicksmith' -Value "`"$app`" --tray"
     }
 
-    # Apps & features entry (per user, no admin).
+    # Apps & features entry (per user, no admin). Replaces a Setup.exe entry, which no longer applies.
+    Remove-Item $script:SetupUninstallKey -Recurse -Force -ErrorAction SilentlyContinue
     if (-not (Test-Path $script:UninstallKey)) { New-Item -Path $script:UninstallKey -Force | Out-Null }
     $uninstall = Join-Path $script:InstallDir 'tools\uninstall.ps1'
     $size = [int]((Get-ChildItem $script:InstallDir -Recurse -File | Measure-Object Length -Sum).Sum / 1KB)

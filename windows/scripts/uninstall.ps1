@@ -10,6 +10,7 @@ $data = Join-Path $env:APPDATA 'Clicksmith'
 Get-Process -Name 'Clicksmith.Engine', 'Clicksmith' -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Kill(); $_.WaitForExit(3000) | Out-Null } catch { } }
 Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Clicksmith Engine', 'Clicksmith' -ErrorAction SilentlyContinue
 Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Clicksmith' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F1C2C61-5D7A-4F5B-9F64-2B3E1C0A1D2C}_is1' -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Clicksmith.lnk') -Force -ErrorAction SilentlyContinue
 # The running uninstaller may live inside the install folder; remove it after this process exits.
 $self = $PSCommandPath

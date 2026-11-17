@@ -3,6 +3,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- UI Automation (password-field check before typing text). No WPF windows are created. -->
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Clicksmith.Engine</AssemblyName>
     <RootNamespace>Clicksmith.Engine</RootNamespace>

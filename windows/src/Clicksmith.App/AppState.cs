@@ -30,6 +30,7 @@ internal sealed class AppState
     public DateTimeOffset? IdentifyStarted { get; private set; }
     public DateTimeOffset? TestStarted { get; private set; }
     public string? EngineMessage { get; set; }
+    public List<MouseDevice> Mice { get; private set; } = new();
     public readonly EngineControl Engine = new();
 
     public event Action? Changed;
@@ -60,8 +61,12 @@ internal sealed class AppState
             _watcher.Renamed += (s, e) => OnFile(s, e);
         }
         catch { /* fall back to the timer */ }
+        Mice = Devices.Mice();
+        // Upgrading from a version without the welcome guide: skip it if a setup already exists.
+        if (!Config.Settings.OnboardingCompleted && Config.Profiles.Any(p => p.Mappings.Count > 0))
+            Update(c => c.Settings.OnboardingCompleted = true);
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _timer.Tick += (_, _) => RefreshStatus(notify: true);
+        _timer.Tick += (_, _) => { RefreshDevices(); RefreshStatus(notify: true); };
         _timer.Start();
     }
 
@@ -102,6 +107,17 @@ internal sealed class AppState
         s.Heartbeat = beat;
         return json;
     }
+
+    /// <summary>Mouse list; only re-renders when something was connected or removed.</summary>
+    public void RefreshDevices()
+    {
+        var now = Devices.Mice();
+        if (now.SequenceEqual(Mice)) return;
+        Mice = now;
+        Notify();
+    }
+
+    public bool HasSteelSeries => Mice.Any(m => m.IsSteelSeries);
 
     private void ReadResult()
     {
@@ -171,6 +187,7 @@ internal sealed class AppState
 
     public void Upsert(ButtonMapping m) => Update(c =>
     {
+        if (m.Button != ClickButton.Key) m.TriggerVk = 0;
         var list = c.ActiveProfile.Mappings;
         var i = list.FindIndex(x => x.Id == m.Id);
         if (i >= 0) list[i] = Clone(m); else list.Add(Clone(m));
@@ -193,7 +210,7 @@ internal sealed class AppState
         Update(c =>
         {
             var p = c.Profiles.FirstOrDefault(x => x.Id == d.ProfileId) ?? c.ActiveProfile;
-            if (p.Mappings.All(x => x.Button != d.Mapping.Button)) p.Mappings.Add(d.Mapping);
+            if (p.Mappings.All(x => x.Trigger != d.Mapping.Trigger)) p.Mappings.Add(d.Mapping);
         });
     }
 
@@ -270,6 +287,13 @@ internal sealed class AppState
     }
 
     public void CancelIdentify() { IdentifyStarted = null; Notify(); }
+
+    /// <summary>The trigger found by the last "Find a button", if any.</summary>
+    public Trigger? Identified => LastResult is { Kind: "identified", Button: { } b } r ? new Trigger(b, b == ClickButton.Key ? r.Vk : (ushort)0) : null;
+
+    public ButtonMapping? MappingFor(Trigger t) => ActiveProfile.Mappings.FirstOrDefault(m => m.Trigger == t);
+
+    public void CompleteOnboarding() => Update(c => c.Settings.OnboardingCompleted = true);
 
     public async void RestartEngine()
     {

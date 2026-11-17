@@ -61,8 +61,32 @@ internal sealed class ActionSender : IDisposable
                     Log.Write("Type text skipped: a sign-in prompt is in front");
                     return;
                 }
+                if (FocusIsPasswordOrUnknown())
+                {
+                    Log.Write("Type text skipped: a password field has focus (or it couldn't be checked)");
+                    return;
+                }
                 TypeText(text);
                 break;
+        }
+    }
+
+    /// <summary>Asks UI Automation whether the focused field is a password field. Apps that don't
+    /// answer within 400 ms are treated as "unknown", and the text is not typed — safety first.</summary>
+    private static bool FocusIsPasswordOrUnknown()
+    {
+        try
+        {
+            var check = System.Threading.Tasks.Task.Run(() =>
+            {
+                var el = System.Windows.Automation.AutomationElement.FocusedElement;
+                return el is not null && el.Current.IsPassword;
+            });
+            return !check.Wait(400) || check.Result;
+        }
+        catch
+        {
+            return false; // no focused element (e.g. desktop): nothing sensitive to protect
         }
     }
 
