@@ -73,9 +73,9 @@ internal static class Theme
 
     public static int ColorRef(SolidColorBrush b) => b.Color.R | (b.Color.G << 8) | (b.Color.B << 16);
 
-    private static SolidColorBrush B((byte R, byte G, byte B) c)
+    private static SolidColorBrush B((int R, int G, int B) c)
     {
-        var s = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        var s = new SolidColorBrush(Color.FromRgb((byte)c.R, (byte)c.G, (byte)c.B));
         s.Freeze();
         return s;
     }
