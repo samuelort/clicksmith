@@ -7,3 +7,4 @@ build/
 *.snk
 *.key
 *.pem
+.DS_Store
