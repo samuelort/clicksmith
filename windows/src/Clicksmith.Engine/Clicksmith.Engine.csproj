@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>Clicksmith.Engine</AssemblyName>
+    <RootNamespace>Clicksmith.Engine</RootNamespace>
+    <ApplicationIcon>..\..\assets\clicksmith.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clicksmith.Core\Clicksmith.Core.csproj" />
+  </ItemGroup>
+</Project>

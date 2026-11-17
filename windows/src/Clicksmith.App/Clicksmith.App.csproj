@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>Clicksmith</AssemblyName>
+    <RootNamespace>Clicksmith.App</RootNamespace>
+    <StartupObject>Clicksmith.App.Program</StartupObject>
+    <ApplicationIcon>..\..\assets\clicksmith.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clicksmith.Core\Clicksmith.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\assets\clicksmith.ico" Link="assets\clicksmith.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\logo.png" Link="assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

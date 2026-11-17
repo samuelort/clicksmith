@@ -1,0 +1,2 @@
+# Keep every file byte-identical on checkout so the release check (MANIFEST.sha256) works on Windows.
+* -text

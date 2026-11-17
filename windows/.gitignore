@@ -1,0 +1,9 @@
+bin/
+obj/
+build/
+*.user
+.vs/
+*.pfx
+*.snk
+*.key
+*.pem

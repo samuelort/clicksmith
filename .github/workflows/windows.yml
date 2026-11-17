@@ -1,0 +1,34 @@
+name: Windows
+on:
+  push:
+    paths: ['windows/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['windows/**']
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Self-test
+        run: |
+          dotnet build src/Clicksmith.SelfTest/Clicksmith.SelfTest.csproj -c Release -nologo
+          dotnet src/Clicksmith.SelfTest/bin/Release/net8.0/Clicksmith.SelfTest.dll
+      - name: Build engine and app
+        run: |
+          dotnet publish src/Clicksmith.Engine/Clicksmith.Engine.csproj -c Release -r win-x64 --self-contained false -o build/out -nologo
+          dotnet publish src/Clicksmith.App/Clicksmith.App.csproj -c Release -r win-x64 --self-contained false -o build/out -nologo
+      - name: Release check
+        shell: pwsh
+        run: |
+          . ./scripts/lib/common.ps1
+          Test-ReleaseFiles
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clicksmith-Windows
+          path: windows/build/out
