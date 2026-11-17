@@ -23,6 +23,9 @@ public sealed class EngineStatus
     public int ActiveMappings { get; set; }
     public bool TestMode { get; set; }
     public string? LastError { get; set; }
+    /// <summary>Last action the engine deliberately didn't run (password field, untrusted app...).</summary>
+    public string? LastSkipped { get; set; }
+    public DateTimeOffset? LastSkippedAt { get; set; }
     /// <summary>F13–F24 keys registered for extra buttons.</summary>
     public List<string> ExtraKeys { get; set; } = new();
     /// <summary>Extra keys another app already uses (registration refused).</summary>

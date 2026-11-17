@@ -68,6 +68,8 @@ internal sealed class OverviewPage
             Add(Ui.Banner(BannerKind.Warning, $"{string.Join(", ", busy)} is used by another app, so that extra button can't be read."));
         if (SettingsPage.UpdateAvailable is { } upd)
             Add(Ui.Banner(BannerKind.Info, upd, "Update", () => _w.OpenSettings(3)));
+        if (_s.Status?.LastSkipped is { } sk && _s.Status.LastSkippedAt is { } skAt && DateTimeOffset.UtcNow - skAt < TimeSpan.FromMinutes(10))
+            Add(Ui.Banner(BannerKind.Info, $"{sk} ({Ui.Relative(skAt)})"));
         if (_s.LastDeleted is { } d)
             Add(Ui.Banner(BannerKind.Info, $"{d.Mapping.Label} was deleted.", "Undo", _s.UndoDelete));
         return p;

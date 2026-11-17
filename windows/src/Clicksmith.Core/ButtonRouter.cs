@@ -143,6 +143,8 @@ public sealed class ButtonRouter
         else if (r.Long is not null) summary = $"{name}{where}: tap → {r.Short?.Display ?? "nothing"} · hold {r.ThresholdMs} ms → {r.Long.Display}";
         else if (r.Short is not null) summary = $"{name}{where}: would run {r.Short.Display}" + (r.Block && !t.IsKey ? " (normal action blocked)" : "");
         else summary = $"{name}{where}: disabled — the normal action is blocked.";
+        if (r?.Short?.Kind == ActionKind.TypeText || r?.Long?.Kind == ActionKind.TypeText)
+            summary += " Text is never typed into password fields or sign-in prompts.";
         return new EngineResult
         {
             RequestId = s.TestId ?? Guid.Empty, Kind = "test", Button = t.Button, Vk = t.Vk, App = s.App,

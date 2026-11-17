@@ -261,6 +261,15 @@ Check("router: test mode reports and never runs", () =>
     var d = r.OnInput(backT, true, 0, Snap(holdCfg, "ms-teams.exe", test: id));
     return d.Action is null && d.Swallow && d.Result!.Kind == "test" && d.Result.Summary.Contains("Ctrl+Shift+M");
 });
+var txtCfg = ClicksmithConfig.CreateDefault();
+txtCfg.ActiveProfile.Mappings.Add(new ButtonMapping { Label = "Signature", Button = ClickButton.Middle, DefaultAction = new ButtonAction { Kind = ActionKind.TypeText, Text = "Hej" } });
+Check("router: test mode explains text safety", () =>
+    new ButtonRouter().OnInput(new Trigger(ClickButton.Middle), true, 0, Snap(txtCfg, test: Guid.NewGuid())).Result!.Summary.Contains("password"));
+Check("status keeps last skipped action", () =>
+{
+    IpcFiles.Write(ClicksmithPaths.Status, new EngineStatus { LastSkipped = "x", LastSkippedAt = DateTimeOffset.UtcNow });
+    return IpcFiles.Read<EngineStatus>(ClicksmithPaths.Status)?.LastSkipped == "x";
+});
 Check("router: test mode works while paused", () =>
     new ButtonRouter().OnInput(backT, true, 0, Snap(holdCfg, active: false, test: Guid.NewGuid())).Result is not null);
 Check("router: identify reports once, then normal", () =>

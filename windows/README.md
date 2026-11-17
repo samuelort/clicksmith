@@ -88,6 +88,6 @@ Windows' own mouse driver only passes the five standard buttons to apps; extra b
 - Apps running as administrator ignore input from normal apps, so Clicksmith's actions don't reach them.
 - Settings files are Windows-specific; they can't be imported into the macOS app.
 
-More: [Architecture](docs/ARCHITECTURE.md) · [Test plan](docs/TESTPLAN.md) · [Changelog](docs/CHANGELOG.md) · [Releasing](docs/RELEASING.md)
+More: [Beta guide](docs/BETA-GUIDE.md) · [Architecture](docs/ARCHITECTURE.md) · [Test plan](docs/TESTPLAN.md) · [Changelog](docs/CHANGELOG.md) · [Releasing](docs/RELEASING.md)
 
 MIT License.

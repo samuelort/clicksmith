@@ -54,6 +54,12 @@ internal sealed class EngineHost : Form
             HookChanged = ok => PostToControl(() => OnHookChanged(ok)),
             ExtraKeysChanged = (ok, bad) => PostToControl(() => { _status.ExtraKeys = ok; _status.ExtraKeysUnavailable = bad; ScheduleStatus(); })
         };
+        _sender.Skipped = message => PostToControl(() =>
+        {
+            _status.LastSkipped = message;
+            _status.LastSkippedAt = DateTimeOffset.UtcNow;
+            ScheduleStatus();
+        });
         _reloadDebounce.Tick += (_, _) => { _reloadDebounce.Stop(); LoadConfigAsync(); };
         _statusDebounce.Tick += (_, _) => { _statusDebounce.Stop(); WriteStatus(); };
         _heartbeat.Tick += (_, _) => WriteStatus();

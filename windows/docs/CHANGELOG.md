@@ -1,5 +1,11 @@
 # Changelog (Windows)
 
+## 2.5.0 Beta 1 — private beta prep
+- Light mode: copper, sage, amber and grey text darkened to at least 4.75:1 contrast (WCAG AA); dark mode unchanged.
+- Skipped actions are visible: a banner on the Overview and a line in “Why isn't my button working?” when text wasn't typed (password field, sign-in prompt, busy app) or an app wasn't opened. The password-field check waits up to 750 ms instead of 400 ms.
+- Test mode notes that text is never typed into password fields.
+- Beta guide for testers (installation, SmartScreen, Smart App Control, what to test, how to report).
+
 ## 2.5.0 Beta 1 — install like an app, feel like one
 
 ### Install and update

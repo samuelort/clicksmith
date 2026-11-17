@@ -200,6 +200,8 @@ internal sealed class ButtonsPage
             var busy = st?.ExtraKeysUnavailable ?? new();
             Item(busy.Count == 0, "Extra buttons can be read", busy.Count == 0 ? "Clicksmith listens for your F13–F24 keys." : $"{string.Join(", ", busy)} is taken by another app. Pick another key in the mouse software and here.");
         }
+        if (st?.LastSkipped is { } skipped && st.LastSkippedAt is { } skippedAt && DateTimeOffset.UtcNow - skippedAt < TimeSpan.FromHours(24))
+            Item(false, "An action was skipped " + Ui.Relative(skippedAt), skipped);
         var app = st?.LastExternalApp;
         var rule = app is null ? null : _s.ActiveProfile.Mappings.FirstOrDefault(m => m.Overrides.Any(o => o.Enabled && o.App.Equals(app, StringComparison.OrdinalIgnoreCase)));
         Item(null, "Rule for the last app", app is null ? "No app seen yet." : rule is null ? $"{app} uses the default actions." : $"{app} has its own action for {rule.Label}.");

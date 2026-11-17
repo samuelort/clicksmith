@@ -19,6 +19,15 @@ internal sealed class ActionSender : IDisposable
     private readonly Thread _thread;
     private readonly string[] _allowedRoots = AppLocationPolicy.DefaultRoots();
 
+    /// <summary>Called (on the action thread) when an action is deliberately not run.</summary>
+    public Action<string>? Skipped { get; set; }
+
+    private void Skip(string userMessage, string log)
+    {
+        Log.Write(log);
+        Skipped?.Invoke(userMessage);
+    }
+
     public ActionSender()
     {
         _thread = new Thread(Run) { IsBackground = true, Name = "Clicksmith actions" };
@@ -50,7 +59,8 @@ internal sealed class ActionSender : IDisposable
             case ActionKind.OpenApp when a.AppPath is { } path:
                 if (!AppLocationPolicy.IsAllowed(path, _allowedRoots) || !File.Exists(path))
                 {
-                    Log.Write("Open app refused: not an installed program in a trusted folder");
+                    Skip("App wasn't opened: only programs installed in Program Files or AppData\\Programs can be opened.",
+                        "Open app refused: not an installed program in a trusted folder");
                     return;
                 }
                 Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
@@ -58,13 +68,18 @@ internal sealed class ActionSender : IDisposable
             case ActionKind.TypeText when a.Text is { } text:
                 if (app is not null && CredentialProcesses.Contains(app))
                 {
-                    Log.Write("Type text skipped: a sign-in prompt is in front");
+                    Skip("Text wasn't typed: a Windows sign-in prompt was in front.", "Type text skipped: a sign-in prompt is in front");
                     return;
                 }
-                if (FocusIsPasswordOrUnknown())
+                switch (CheckFocus())
                 {
-                    Log.Write("Type text skipped: a password field has focus (or it couldn't be checked)");
-                    return;
+                    case FocusCheck.Password:
+                        Skip("Text wasn't typed: a password field had focus.", "Type text skipped: password field");
+                        return;
+                    case FocusCheck.Unknown:
+                        Skip("Text wasn't typed: the app was too busy to say whether the field is a password field. Try again.",
+                            "Type text skipped: focus check timed out");
+                        return;
                 }
                 TypeText(text);
                 break;
@@ -73,6 +88,27 @@ internal sealed class ActionSender : IDisposable
 
     /// <summary>Asks UI Automation whether the focused field is a password field. Apps that don't
     /// answer within 400 ms are treated as "unknown", and the text is not typed — safety first.</summary>
+    private enum FocusCheck { Safe, Password, Unknown }
+
+    /// <summary>Asks UI Automation whether the focused field is a password field (750 ms limit).</summary>
+    private static FocusCheck CheckFocus()
+    {
+        try
+        {
+            var check = System.Threading.Tasks.Task.Run(() =>
+            {
+                var el = System.Windows.Automation.AutomationElement.FocusedElement;
+                return el is not null && el.Current.IsPassword;
+            });
+            if (!check.Wait(750)) return FocusCheck.Unknown;
+            return check.Result ? FocusCheck.Password : FocusCheck.Safe;
+        }
+        catch
+        {
+            return FocusCheck.Safe; // no focused element (e.g. desktop): nothing sensitive to protect
+        }
+    }
+
     private static bool FocusIsPasswordOrUnknown()
     {
         try
